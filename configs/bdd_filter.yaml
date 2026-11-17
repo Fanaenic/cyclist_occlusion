@@ -1,0 +1,36 @@
+# Отбор объектов BDD100K для класса Cyclist (замечания 3 и 8).
+# Порядок шагов: rider -> сопоставление с bike -> daytime -> высота рамки rider.
+
+labels_dir: data/bdd100k/labels
+label_file: bdd100k_labels_images_{split}.json
+splits: [train, val]
+out_dir: reports
+
+categories:
+  rider: rider
+  bike: bike
+
+matching:
+  # Пара (rider, bike) — кандидат, если IoU рамок >= iou_min.
+  iou_min: 0.1
+  # global_greedy: все пары-кандидаты изображения сортируются по убыванию IoU
+  # (при равенстве — по id rider, затем по id bike) и закрепляются по очереди,
+  # если ни rider, ни bike ещё не заняты. Каждый rider и bike используется не более одного раза.
+  algorithm: global_greedy
+
+# Целевая рамка объекта Cyclist: union — объединение рамок rider и сопоставленного bike
+# (как KITTI Cyclist: человек вместе с велосипедом); rider — только рамка человека.
+target_box: union
+
+filters:
+  timeofday: daytime        # атрибут изображения attributes.timeofday
+  min_height_px: 25         # высота целевой рамки: y2 - y1
+
+# Пары, у которых целевая рамка намного больше рамки rider (возможно, чужой велосипед),
+# попадают в bdd_ambiguous.csv для ручного просмотра. Из выборки они НЕ исключаются.
+review:
+  max_target_to_rider_area: 3.0
+
+# Числа из текущего введения (получены неэксклюзивным сопоставлением) — только для сравнения.
+reference_counts:
+  train: {rider: 4517, matched: 2597, daytime: 1965, min_height: 1807}

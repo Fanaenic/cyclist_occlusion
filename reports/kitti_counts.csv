@@ -1,0 +1,11 @@
+subset,step,images,objects
+occlusion=0,all_images,7481,
+occlusion=0,cyclist,1141,1627
+occlusion=0,occlusion,773,1010
+occlusion=0,truncation,716,925
+occlusion=0,min_height,640,832
+occlusion=1,all_images,7481,
+occlusion=1,cyclist,1141,1627
+occlusion=1,occlusion,226,255
+occlusion=1,truncation,215,240
+occlusion=1,min_height,211,236

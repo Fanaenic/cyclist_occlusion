@@ -1,0 +1,34 @@
+# Обучение YOLOv8n и прогон всего конвейера (src/run_experiment.py).
+# Режимы и параметры масок обучения — configs/masks.yaml (раздел training); протокол оценки — configs/protocol.yaml.
+
+# Начальные веса. yolov8n.yaml — обучение с нуля, ничего не скачивается (для технического прогона).
+# Для основной серии планируется yolov8n.pt (предобучение на COCO): файл скачивается с GitHub Ultralytics
+# только после явного разрешения и кладётся в weights/.
+model: yolov8n.yaml
+
+imgsz: 640
+batch: 16
+epochs: 100            # основная серия; для smoke test — см. smoke.epochs
+workers: 0             # 0 — детерминированный порядок и маски обучения на Windows
+deterministic: true
+amp: true
+plots: false
+# Модель — веса последней эпохи; выбор «лучшей» эпохи не делается, поэтому валидация Ultralytics
+# по эпохам отключена (calib используется только для замороженного порога, см. protocol.yaml).
+val: false
+offline: true          # YOLO_OFFLINE=1: Ultralytics ничего не скачивает
+
+regimes: [baseline, proposed, ore]
+seeds: [1, 2, 3]
+datasets: [kitti, bdd]
+
+inference:
+  batch: 32
+  max_det_raw: 300     # сколько рамок оставляет Ultralytics; окончательный NMS и max_det — по протоколу
+
+out_dir: runs
+
+# Технический прогон (замечание 8): малое подмножество, несколько эпох. Числа — не результат исследования.
+smoke:
+  limit: 200           # изображений в каждой части (сначала с целями, затем без, по алфавиту)
+  epochs: 3

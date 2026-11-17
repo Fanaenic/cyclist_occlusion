@@ -1,0 +1,31 @@
+# Разбиение на три непересекающиеся части train / calib / test (замечание 5).
+# Части формируются из целых кластеров. Кластеры перемешиваются с seed и по очереди
+# добавляются в часть, пока её доля отобранных объектов не достигнет целевой.
+
+seed: 20261117
+out_dir: splits
+report_dir: reports
+
+bdd:
+  labels_dir: data/bdd100k/labels
+  label_file: bdd100k_labels_images_{split}.json
+  selected_file: reports/bdd_selected_{split}.csv   # результат src/bdd_filter.py
+  final_step: min_height
+  # test — официальный val целиком; calib выделяется из официального train.
+  test_source: val
+  train_source: train
+  # Единица кластера: первые 8 hex-символов имени файла (до «-»).
+  # Имя файла уникально (один ключевой кадр на видео), префикс объединяет видео одной
+  # сессии съёмки — см. reports/splits.md. Атрибут scene (тип обстановки) не используется.
+  cluster: name_prefix
+  calib_object_share: 0.15        # доля отобранных объектов official train, уходящая в calib
+
+kitti:
+  label_dir: data/kitti/label_2
+  selected_file: reports/kitti_selected.csv          # результат src/kitti_filter.py
+  # Сопоставление кадров KITTI object с поездками KITTI raw (devkit_object, папка mapping).
+  mapping_file: data/kitti/devkit/mapping/train_mapping.txt
+  rand_file: data/kitti/devkit/mapping/train_rand.txt
+  cluster: raw_drive              # единица кластера — поездка (drive) KITTI raw
+  test_object_share: 0.20
+  calib_object_share: 0.15

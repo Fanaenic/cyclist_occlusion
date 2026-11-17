@@ -1,0 +1,6 @@
+dataset,metric,level,treatment,control,value_treatment,value_control,estimate,fppi_treatment,fppi_control,ci_level,ci_low,ci_high,fppi_gap,budget,estimate_budget,ci_low_budget,ci_high_budget,decision
+bdd,recall,0.3,proposed,ore,0.0,0.0,0.0,0.02333333333333333,0.07833333333333334,0.99375,0.0,0.0,0.05500000000000001,0.07833333333333334,0.0,0.0,0.0,not_established
+bdd,recall,0.5,proposed,ore,0.0,0.0,0.0,0.018333333333333333,0.06833333333333333,0.99375,0.0,0.0,0.049999999999999996,,,,,not_established
+bdd,recall,0.7,proposed,ore,0.0,0.0,0.0,0.025000000000000005,0.08333333333333333,0.99375,0.0,0.0,0.05833333333333332,0.08333333333333333,0.0,0.0,0.0,not_established
+bdd,recall,0.9,proposed,ore,0.0,0.0,0.0,0.024999999999999998,0.06333333333333334,0.99375,0.0,0.0,0.038333333333333344,,,,,not_established
+bdd,ap,0.0,proposed,ore,8.847121016233482e-06,1.3009496558677354e-05,-4.162375542443873e-06,0.03,0.07166666666666667,0.95,-1.9080902184164415e-05,inf,,,,,,non_inferior

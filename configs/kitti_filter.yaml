@@ -1,0 +1,17 @@
+# Отбор объектов KITTI (замечание 8).
+# Порядок шагов: Cyclist -> occlusion = 0 -> truncation <= max_truncation -> высота рамки.
+
+label_dir: data/kitti/label_2
+out_dir: reports
+
+category: Cyclist
+
+filters:
+  occlusion: 0            # 0 — полностью видим, 1 — частично, 2 — в основном перекрыт, 3 — неизвестно
+  max_truncation: 0.05    # доля объекта за краем кадра
+  min_height_px: 25       # bottom - top
+
+# Отдельно сохраняется подмножество с occlusion = 1 (те же truncation и высота) — для диагностики.
+extra_occlusion_subset: 1
+
+reference_counts: {cyclist: 1627, occlusion: 1010, truncation: 925, min_height: 832}

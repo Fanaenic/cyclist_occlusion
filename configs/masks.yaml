@@ -1,0 +1,83 @@
+# Синтетическая окклюзия: прямоугольная маска внутри рамки объекта (замечания 2 и 8).
+#
+# Рамка объекта переводится в пиксели как [floor(x1), ceil(x2)) x [floor(y1), ceil(y2)).
+# Доля перекрытия = площадь маски / площадь пиксельной рамки (маска всегда целиком внутри рамки).
+
+levels: [0.0, 0.3, 0.5, 0.7, 0.9]   # тестовые уровни перекрытия
+tolerance_pp: 2.0                   # допустимое отклонение фактической доли, процентных пунктов
+
+shape:
+  aspect_ratio: [0.5, 2.0]   # ширина/высота маски, лог-равномерно; при упоре в край рамки меняется
+  position: uniform          # uniform — равномерно по допустимым положениям; center — по центру рамки
+
+fill:
+  # background — участок фона того же кадра (вне всех размеченных рамок людей и велосипедов);
+  # noise — равномерный шум; constant — один цвет.
+  # Шум отвергнут по итогам технического прогона: при обучении он появлялся только на велосипедистах,
+  # и модель училась находить сам шумовой прямоугольник (reports/smoke.md).
+  mode: background
+  constant: [114, 114, 114]  # цвет для mode: constant (серый, как паддинг Ultralytics)
+
+background:
+  max_tries: 200             # попыток найти участок фона без пересечения с рамками
+
+# Контрольный набор (test): для каждой цели — заплатка размера её маски уровня `level`, поставленная
+# на фон вне всех рамок; цели при этом не закрываются. Детекции на таких заплатках = обучение на заплатку.
+control:
+  level: 0.5
+
+# Соседние объекты: маска цели не должна заметно закрывать чужие рамки.
+neighbors:
+  policy: avoid              # avoid — перебирать положения; allow — не учитывать соседей
+  max_cover: 0.10            # допустимая доля площади соседней рамки под маской
+  max_tries: 200             # попыток положения и формы; если не удалось — берётся лучшая и ставится флаг
+  categories:
+    kitti: [Cyclist, Pedestrian, Person_sitting]
+    bdd: [rider, person, bike]      # собственный bike цели соседом не считается
+
+# Тестовые маски: генерируются один раз и сохраняются в splits/masks_{dataset}_{part}.csv.
+# Baseline, proposed и ORE оцениваются на одних и тех же масках.
+fixed_masks:
+  seed: 7341                 # отдельный seed, не совпадает с seed обучения и разбиения
+  parts: [calib, test]
+
+datasets:
+  kitti:
+    selected_file: reports/kitti_selected.csv
+    label_dir: data/kitti/label_2
+    image_dir: data/kitti/image_2
+    image_ext: .png
+  bdd:
+    selected_file: reports/bdd_selected_{source}.csv
+    final_step: min_height
+    labels_dir: data/bdd100k/labels
+    label_file: bdd100k_labels_images_{source}.json
+    image_dir: data/bdd100k/images/{source}
+    image_ext: ""
+    image_size: [1280, 720]
+    sources: {train: train, calib: train, test: val}   # из какого официального файла берётся часть
+
+splits_dir: splits
+report_dir: reports
+examples_dir: reports/examples
+
+# Режимы обучения. Маска применяется к каждому целевому объекту независимо с вероятностью p.
+training:
+  seed: 2024
+  baseline:
+    p: 0.0
+  proposed:
+    # ЗАГОТОВКА: распределение обучающих уровней — решение автора (вклад, замечание 2).
+    # Сейчас — смесь уровней 30/50/70 % с равными весами.
+    p: 0.5
+    levels: [0.3, 0.5, 0.7]
+    weights: [1, 1, 1]
+    decoys: true             # на каждую маску цели — такая же заплатка на фоне
+  ore:
+    # Object-aware Random Erasing (Zhong et al., 2020): площадь и форма — как в первоисточнике.
+    # Заливка — общая fill (фон), а не шум первоисточника: равные условия с proposed и без утечки признака.
+    p: 0.5
+    area: [0.02, 0.4]        # доля площади рамки, равномерно
+    aspect_ratio: [0.3, 3.33]
+    max_tries: 100
+    decoys: true

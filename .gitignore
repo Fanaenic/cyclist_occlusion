@@ -1,0 +1,16 @@
+# Сырые данные: не коммитить
+data/
+
+# Окружение и кэши
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Артефакты обучения Ultralytics
+runs/
+*.pt
+datasets_yolo/
+
+# Временные файлы Word
+~$*.docx

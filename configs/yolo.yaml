@@ -1,0 +1,39 @@
+# Конвертация отобранных объектов в формат YOLO, один класс Cyclist (id 0).
+#
+# Структура выхода (папка в .gitignore):
+#   {out_dir}/{dataset}/images/{part}/<файл>   жёсткая ссылка на исходное изображение (без копирования)
+#   {out_dir}/{dataset}/labels/{part}/<имя>.txt  "0 cx cy w h", координаты нормированы на размер кадра
+#   {out_dir}/{dataset}/ignore/{part}/<имя>.txt  "x1 y1 x2 y2 причина", пиксели — области, исключённые из оценки
+#   {out_dir}/{dataset}.yaml                     конфиг набора данных для Ultralytics (train / val=calib / test)
+
+out_dir: datasets_yolo
+splits_dir: splits
+report_dir: reports
+examples_dir: reports/examples
+class_name: Cyclist
+n_examples: 5
+
+kitti:
+  selected_file: reports/kitti_selected.csv
+  label_dir: data/kitti/label_2
+  image_dir: data/kitti/image_2
+  image_ext: .png
+  target: Cyclist
+  # Cyclist, не прошедший фильтры (occlusion, truncation, высота), и DontCare — ignore.
+  # Pedestrian, Person_sitting и прочие классы остаются фоном: срабатывание на них — ложное.
+  ignore_categories: [Cyclist, DontCare]
+
+bdd:
+  selected_file: reports/bdd_selected_{source}.csv
+  final_step: min_height
+  labels_dir: data/bdd100k/labels
+  label_file: bdd100k_labels_images_{source}.json
+  image_dir: data/bdd100k/images/{source}
+  sources: {train: train, calib: train, test: val}
+  image_size: [1280, 720]       # все изображения BDD100K — 1280x720
+  timeofday: daytime            # кадры с другим временем суток в набор не входят (фильтр уровня изображения)
+  # Целевая рамка (rider или rider∪bike) берётся из selected_file; её тип задаётся в configs/bdd_filter.yaml.
+  # См. reports/yolo_box_shapes.md.
+  filter_config: configs/bdd_filter.yaml
+  # rider, не прошедший сопоставление или порог высоты, — ignore.
+  ignore_categories: [rider]

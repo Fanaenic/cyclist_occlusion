@@ -1,0 +1,185 @@
+split,image,case,object_id,candidates,assigned
+train,0024b742-83709bd4.jpg,target_much_larger_than_rider,1259,1258:0.296,1258 (площадь цели / rider = 3.01)
+train,07af84f8-7657a1d7.jpg,target_much_larger_than_rider,81775,81774:0.219,81774 (площадь цели / rider = 3.15)
+train,0a845e39-72bfd603.jpg,target_much_larger_than_rider,113938,113939:0.102,113939 (площадь цели / rider = 3.10)
+train,0cb3bff8-5c2cbe63.jpg,target_much_larger_than_rider,136476,136477:0.261,136477 (площадь цели / rider = 3.54)
+train,0d9d0baa-4466d391.jpg,target_much_larger_than_rider,148589,148590:0.252,148590 (площадь цели / rider = 3.38)
+train,10453a95-40759ac3.jpg,bike_multi_rider,174269,174268:0.257;174266:0.157,174268
+train,10f19d84-af73762a.jpg,bike_multi_rider,181253,181251:0.118;181252:0.106,181251
+train,13ca08ab-193c7e8c.jpg,target_much_larger_than_rider,212033,212032:0.203,212032 (площадь цели / rider = 3.50)
+train,1615c8af-5a9f17ff.jpg,bike_multi_rider,237925,237922:0.306;237921:0.268,237922
+train,173a9b33-55f4fe08.jpg,bike_multi_rider,252208,252206:0.323;252207:0.130,252206
+train,18ca8efa-4f73df88.jpg,bike_multi_rider,268818,268816:0.196;268817:0.158,268816
+train,197cd327-df7bccae.jpg,target_much_larger_than_rider,275808,275809:0.273,275809 (площадь цели / rider = 3.23)
+train,1a02dda3-15b6cd3c.jpg,bike_multi_rider,281063,281060:0.349;281061:0.108,281060
+train,1a02dda3-15b6cd3c.jpg,rider_multi_bike,281061,281062:0.523;281063:0.108,281062
+train,1a02dda3-eaaec820.jpg,bike_multi_rider,281329,281328:0.285;281324:0.269,281328
+train,1a3a3473-1a6e7925.jpg,bike_multi_rider,283940,283942:0.410;283941:0.370,283942
+train,1c1f1003-bcbba258.jpg,target_much_larger_than_rider,304057,304052:0.199,304052 (площадь цели / rider = 4.00)
+train,1e538e6d-3742167c.jpg,bike_multi_rider,327984,327982:0.455;327981:0.258,327982
+train,1e538e6d-3742167c.jpg,rider_multi_bike,327981,327983:0.403;327984:0.258,327983
+train,210eb36c-b4afa62e.jpg,target_much_larger_than_rider,361121,361122:0.229,361122 (площадь цели / rider = 3.09)
+train,21609974-d0ea6aea.jpg,target_much_larger_than_rider,364367,364366:0.136,364366 (площадь цели / rider = 4.25)
+train,22d11e91-7f672b92.jpg,target_much_larger_than_rider,381877,381878:0.256,381878 (площадь цели / rider = 3.34)
+train,23185a86-79af99be.jpg,bike_multi_rider,385180,385178:0.430;385179:0.234,385178
+train,238d2b00-340de702.jpg,target_much_larger_than_rider,389593,389592:0.162,389592 (площадь цели / rider = 4.25)
+train,2439c8bb-cc224bf7.jpg,rider_multi_bike,397848,397846:0.490;397847:0.347,397846
+train,2453b959-dfd0b1f5.jpg,target_much_larger_than_rider,399160,399161:0.226,399161 (площадь цели / rider = 3.87)
+train,2454280d-403e22b3.jpg,rider_multi_bike,399247,399246:0.261;399245:0.191,399246
+train,2454280d-403e22b3.jpg,target_much_larger_than_rider,399247,399246:0.261,399246 (площадь цели / rider = 3.32)
+train,24d751b3-11a16ed4.jpg,target_much_larger_than_rider,405223,405209:0.205,405209 (площадь цели / rider = 4.65)
+train,26cee5ad-4ecbf877.jpg,target_much_larger_than_rider,425251,425250:0.240,425250 (площадь цели / rider = 3.48)
+train,270f9f1a-fee67a87.jpg,bike_multi_rider,427734,427731:0.264;427732:0.137,427731
+train,270f9f1a-fee67a87.jpg,rider_multi_bike,427732,427733:0.347;427734:0.137,427733
+train,28293738-707d98af.jpg,target_much_larger_than_rider,439334,439335:0.227,439335 (площадь цели / rider = 3.22)
+train,2c926be5-dc0467ea.jpg,target_much_larger_than_rider,487399,487398:0.139,487398 (площадь цели / rider = 3.06)
+train,2e9fa1c3-1df40087.jpg,target_much_larger_than_rider,508182,508183:0.214,508183 (площадь цели / rider = 4.23)
+train,2f1864c1-3dba4a95.jpg,target_much_larger_than_rider,513305,513306:0.175,513306 (площадь цели / rider = 4.07)
+train,2f6464ff-7dc028cd.jpg,target_much_larger_than_rider,517730,517731:0.102,517731 (площадь цели / rider = 5.37)
+train,3278b26f-e4d0f5ba.jpg,bike_multi_rider,551542,551541:0.395;551539:0.148;551540:0.115,551541
+train,3278b26f-e4d0f5ba.jpg,bike_multi_rider,551543,551541:0.275;551539:0.118,551539
+train,3278b26f-e4d0f5ba.jpg,rider_multi_bike_alt,551539,551542:0.148;551543:0.118,551543
+train,3278b26f-e4d0f5ba.jpg,rider_multi_bike,551540,551544:0.115;551542:0.115,551544
+train,3278b26f-e4d0f5ba.jpg,rider_multi_bike,551541,551542:0.395;551543:0.275,551542
+train,3278b26f-e4d0f5ba.jpg,target_much_larger_than_rider,551539,551543:0.118,551543 (площадь цели / rider = 3.92)
+train,33bd5349-8966a895.jpg,target_much_larger_than_rider,564956,564959:0.210,564959 (площадь цели / rider = 3.23)
+train,33f52e5f-5b2099d4.jpg,target_much_larger_than_rider,567310,567311:0.151,567311 (площадь цели / rider = 4.00)
+train,34305434-adef695a.jpg,bike_multi_rider,569916,569914:0.392;569912:0.282,569914
+train,3539c279-0451e3fb.jpg,target_much_larger_than_rider,579468,579467:0.203,579467 (площадь цели / rider = 3.20)
+train,353c68ef-d95e98bb.jpg,bike_multi_rider,579760,579765:0.363;579766:0.196,579765
+train,353c68ef-d95e98bb.jpg,rider_multi_bike,579766,579761:0.333;579760:0.196,579761
+train,359c8000-385c7277.jpg,bike_multi_rider,584164,584158:0.296;584159:0.191,584158
+train,35a25299-63aad101.jpg,target_much_larger_than_rider,584475,584476:0.156,584476 (площадь цели / rider = 4.28)
+train,3648dd75-aeff7873.jpg,target_much_larger_than_rider,592502,592503:0.106,592503 (площадь цели / rider = 7.54)
+train,3e1a7d8e-216344b5.jpg,target_much_larger_than_rider,678330,678333:0.268,678333 (площадь цели / rider = 3.72)
+train,3eda591c-7b941cb1.jpg,target_much_larger_than_rider,685648,685649:0.103,685649 (площадь цели / rider = 3.11)
+train,3f8eff47-2f8519e4.jpg,target_much_larger_than_rider,692973,692974:0.262,692974 (площадь цели / rider = 3.05)
+train,4015e0e1-1b20e835.jpg,target_much_larger_than_rider,698919,698920:0.199,698920 (площадь цели / rider = 3.48)
+train,4192d5a6-dd58254d.jpg,target_much_larger_than_rider,713582,713583:0.235,713583 (площадь цели / rider = 3.32)
+train,432ebb4f-84a729dc.jpg,bike_multi_rider,730306,730304:0.369;730305:0.268,730304
+train,43b8514e-db4b8257.jpg,target_much_larger_than_rider,735319,735320:0.152,735320 (площадь цели / rider = 3.49)
+train,45f290df-dac90cfd.jpg,target_much_larger_than_rider,759123,759122:0.154,759122 (площадь цели / rider = 4.24)
+train,46794278-0f2e6071.jpg,target_much_larger_than_rider,764751,764752:0.221,764752 (площадь цели / rider = 3.10)
+train,4766b490-3b00155c.jpg,bike_multi_rider,775571,775566:0.279;775567:0.165,775566
+train,4766b490-3b00155c.jpg,rider_multi_bike,775567,775570:0.504;775571:0.165,775570
+train,47ec5f3c-39bc43ed.jpg,bike_multi_rider,780419,780417:0.442;780418:0.230,780417
+train,47ec5f3c-39bc43ed.jpg,bike_multi_rider,780420,780418:0.398;780417:0.261,780418
+train,47ec5f3c-39bc43ed.jpg,rider_multi_bike,780417,780419:0.442;780420:0.261,780419
+train,47ec5f3c-39bc43ed.jpg,rider_multi_bike,780418,780420:0.398;780419:0.230,780420
+train,48ba7adf-36fdaddd.jpg,rider_multi_bike,788697,788696:0.429;788695:0.239,788696
+train,48ba7adf-622bfdd6.jpg,bike_multi_rider,788816,788814:0.284;788815:0.258,788814
+train,4a93cba4-cff1bc04.jpg,target_much_larger_than_rider,808214,808215:0.176,808215 (площадь цели / rider = 4.76)
+train,4abf640c-31cb1b88.jpg,target_much_larger_than_rider,810423,810410:0.268,810410 (площадь цели / rider = 3.14)
+train,4c1d2408-cca1e508.jpg,bike_multi_rider,824931,824928:0.433;824927:0.123,824928
+train,4c1d2408-cca1e508.jpg,rider_multi_bike,824927,824930:0.296;824931:0.123,824930
+train,4c4b3b2b-13c8de18.jpg,bike_multi_rider,827089,827090:0.363;827088:0.319,827088
+train,4c4b3b2b-13c8de18.jpg,bike_multi_rider,827091,827090:0.405;827088:0.359,827090
+train,4c4b3b2b-13c8de18.jpg,rider_multi_bike_alt,827088,827091:0.359;827089:0.319,827089
+train,4c4b3b2b-13c8de18.jpg,rider_multi_bike,827090,827091:0.405;827089:0.363,827091
+train,4c840aee-f4bc07b0.jpg,target_much_larger_than_rider,829975,829976:0.103,829976 (площадь цели / rider = 3.40)
+train,4ee348f8-0887f45b.jpg,bike_multi_rider,854938,854936:0.599;854937:0.123,854936
+train,4ee348f8-0887f45b.jpg,bike_multi_rider,854939,854937:0.522;854936:0.168,854937
+train,4ee348f8-0887f45b.jpg,rider_multi_bike,854936,854938:0.599;854939:0.168,854938
+train,4ee348f8-0887f45b.jpg,rider_multi_bike,854937,854939:0.522;854938:0.123,854939
+train,50c7e6a3-728823db.jpg,target_much_larger_than_rider,875445,875464:0.268,875464 (площадь цели / rider = 3.13)
+train,54234e75-192df124.jpg,target_much_larger_than_rider,914238,914241:0.110,914241 (площадь цели / rider = 3.24)
+train,588c2e0c-33e7c0d0.jpg,bike_multi_rider,966174,966176:0.235;966177:0.198,966177
+train,588c2e0c-33e7c0d0.jpg,bike_multi_rider,966175,966176:0.262;966177:0.223,966176
+train,588c2e0c-33e7c0d0.jpg,rider_multi_bike,966176,966175:0.262;966174:0.235,966175
+train,588c2e0c-33e7c0d0.jpg,rider_multi_bike_alt,966177,966175:0.223;966174:0.198,966174
+train,588c2e0c-33e7c0d0.jpg,target_much_larger_than_rider,966177,966174:0.198,966174 (площадь цели / rider = 3.95)
+train,5a72cb4d-cbe72111.jpg,bike_multi_rider,987493,987495:0.275;987494:0.267,987495
+train,5a72cb4d-cbe72111.jpg,rider_multi_bike,987494,987492:0.289;987493:0.267,987492
+train,5d7667d9-ca370d67.jpg,target_much_larger_than_rider,1018889,1018890:0.291,1018890 (площадь цели / rider = 3.09)
+train,5d9a603c-e6067a9a.jpg,bike_multi_rider,1020695,1020694:0.286;1020693:0.135,1020694
+train,5d9a603c-e6067a9a.jpg,rider_multi_bike,1020693,1020696:0.461;1020695:0.135,1020696
+train,603bf38b-852ca5f0.jpg,bike_multi_rider,1048604,1048602:0.181;1048601:0.170,1048602
+train,603bf38b-852ca5f0.jpg,rider_multi_bike,1048601,1048603:0.329;1048604:0.170,1048603
+train,603bf38b-852ca5f0.jpg,target_much_larger_than_rider,1048602,1048604:0.181,1048604 (площадь цели / rider = 3.59)
+train,6332f44a-e01eb7d9.jpg,target_much_larger_than_rider,1078954,1078953:0.255,1078953 (площадь цели / rider = 3.23)
+train,63a626a0-711a9450.jpg,target_much_larger_than_rider,1083631,1083633:0.236,1083633 (площадь цели / rider = 3.39)
+train,6772a795-60dafb0f.jpg,target_much_larger_than_rider,1122932,1122940:0.109,1122940 (площадь цели / rider = 4.10)
+train,67e3b82a-88ead06b.jpg,target_much_larger_than_rider,1128031,1128032:0.168,1128032 (площадь цели / rider = 3.20)
+train,68c11534-a4f8b8a1.jpg,bike_multi_rider,1136435,1136434:0.523;1136433:0.453,1136434
+train,693f5825-225166a1.jpg,target_much_larger_than_rider,1142016,1142017:0.195,1142017 (площадь цели / rider = 3.29)
+train,6c03a466-d2a585c1.jpg,target_much_larger_than_rider,1171618,1171619:0.188,1171619 (площадь цели / rider = 4.07)
+train,6ced85c7-9b50a3e5.jpg,rider_multi_bike,1181280,1181284:0.338;1181285:0.260,1181284
+train,6e44c83e-5a61e9e7.jpg,target_much_larger_than_rider,1195408,1195419:0.151,1195419 (площадь цели / rider = 3.76)
+train,6ee715d4-53d11618.jpg,bike_multi_rider,1202309,1202268:0.374;1202267:0.101,1202268
+train,6ee715d4-53d11618.jpg,bike_multi_rider,1202310,1202267:0.333;1202268:0.106,1202267
+train,6ee715d4-53d11618.jpg,rider_multi_bike,1202267,1202310:0.333;1202309:0.101,1202310
+train,6ee715d4-53d11618.jpg,rider_multi_bike,1202268,1202309:0.374;1202310:0.106,1202309
+train,6fbe30fa-dd488763.jpg,bike_multi_rider,1211363,1211362:0.402;1211365:0.169,1211362
+train,6fbe30fa-dd488763.jpg,bike_multi_rider,1211364,1211365:0.384;1211362:0.244,1211365
+train,6fbe30fa-dd488763.jpg,bike_multi_rider,1211366,1211367:0.312;1211365:0.185,1211367
+train,6fbe30fa-dd488763.jpg,rider_multi_bike,1211362,1211363:0.402;1211364:0.244,1211363
+train,6fbe30fa-dd488763.jpg,rider_multi_bike,1211365,1211364:0.384;1211366:0.185;1211363:0.169,1211364
+train,70840413-d865cde5.jpg,target_much_larger_than_rider,1221190,1221189:0.165,1221189 (площадь цели / rider = 4.21)
+train,70b46de9-1d7d1e00.jpg,rider_multi_bike,1222980,1222981:0.372;1222982:0.293,1222981
+train,72206d22-ac3a2852.jpg,bike_multi_rider,1238540,1238543:0.339;1238544:0.110,1238543
+train,72206d22-ac3a2852.jpg,rider_multi_bike,1238544,1238541:0.381;1238540:0.110,1238541
+train,73c160c1-a7dcbcc2.jpg,target_much_larger_than_rider,1256187,1256186:0.231,1256186 (площадь цели / rider = 3.14)
+train,74c5d4b7-53a832a3.jpg,rider_multi_bike,1268681,1268689:0.390;1268690:0.100,1268689
+train,752a3749-d26f32f2.jpg,target_much_larger_than_rider,1272420,1272423:0.158,1272423 (площадь цели / rider = 4.08)
+train,752a3749-d26f32f2.jpg,target_much_larger_than_rider,1272421,1272424:0.206,1272424 (площадь цели / rider = 4.40)
+train,76fb546e-52898b91.jpg,target_much_larger_than_rider,1291992,1291993:0.140,1291993 (площадь цели / rider = 5.67)
+train,793c714a-b8aeb7cf.jpg,bike_multi_rider,1316701,1316700:0.540;1316699:0.422,1316700
+train,79f06acb-fa30703f.jpg,bike_multi_rider,1324488,1324482:0.386;1324483:0.114,1324482
+train,79f06acb-fa30703f.jpg,bike_multi_rider,1324486,1324483:0.309;1324484:0.134,1324483
+train,79f06acb-fa30703f.jpg,bike_multi_rider,1324487,1324483:0.258;1324484:0.111,1324484
+train,79f06acb-fa30703f.jpg,rider_multi_bike,1324483,1324486:0.309;1324487:0.258;1324488:0.114,1324486
+train,79f06acb-fa30703f.jpg,rider_multi_bike_alt,1324484,1324486:0.134;1324487:0.111,1324487
+train,79f06acb-fa30703f.jpg,target_much_larger_than_rider,1324484,1324487:0.111,1324487 (площадь цели / rider = 4.71)
+train,7c8acdd7-6b5ecae7.jpg,target_much_larger_than_rider,1354035,1354036:0.247,1354036 (площадь цели / rider = 3.26)
+train,7e9d3327-69dde7b9.jpg,bike_multi_rider,1375524,1375489:0.190;1375490:0.125,1375489
+train,7e9d3327-69dde7b9.jpg,rider_multi_bike,1375490,1375523:0.326;1375524:0.125,1375523
+train,865b326e-cc193747.jpg,target_much_larger_than_rider,1459281,1459282:0.226,1459282 (площадь цели / rider = 3.36)
+train,877a6c4d-bc9d8d27.jpg,bike_multi_rider,1470438,1470437:0.359;1470436:0.335,1470437
+train,89b67f3f-d61f33cd.jpg,target_much_larger_than_rider,1494838,1494839:0.189,1494839 (площадь цели / rider = 3.04)
+train,8a6171db-70ef5190.jpg,target_much_larger_than_rider,1502799,1502800:0.245,1502800 (площадь цели / rider = 4.08)
+train,8babdf4e-b1b4b28c.jpg,rider_multi_bike,1518197,1518200:0.353;1518199:0.264;1518198:0.103,1518200
+train,8e065f17-4362d2ed.jpg,bike_multi_rider,1542986,1542984:0.596;1542985:0.161,1542984
+train,8e065f17-4362d2ed.jpg,rider_multi_bike,1542985,1542987:0.633;1542986:0.161,1542987
+train,8e380fb2-6f6e4103.jpg,target_much_larger_than_rider,1545066,1545069:0.189,1545069 (площадь цели / rider = 3.58)
+train,8ecc346a-9ece468b.jpg,target_much_larger_than_rider,1552091,1552090:0.212,1552090 (площадь цели / rider = 4.03)
+train,90e87fbb-875957cf.jpg,target_much_larger_than_rider,1574756,1574758:0.130,1574758 (площадь цели / rider = 4.34)
+train,9389dff4-aec00ae0.jpg,target_much_larger_than_rider,1599370,1599371:0.115,1599371 (площадь цели / rider = 6.22)
+train,995d9c96-25af2fce.jpg,target_much_larger_than_rider,1663578,1663579:0.109,1663579 (площадь цели / rider = 3.57)
+train,9a701a7f-c1239790.jpg,bike_multi_rider,1674410,1674408:0.279;1674409:0.146,1674408
+train,9a701a7f-c1239790.jpg,rider_multi_bike,1674409,1674411:0.548;1674410:0.146,1674411
+train,9abbf59f-6d584245.jpg,target_much_larger_than_rider,1677497,1677479:0.117,1677479 (площадь цели / rider = 3.46)
+train,9d17e333-dee3acaf.jpg,bike_multi_rider,1701842,1701844:0.480;1701843:0.145,1701844
+train,9e72ee83-46a98461.jpg,rider_multi_bike,1714628,1714630:0.244;1714629:0.237,1714630
+train,9fc64e15-240c8dbe.jpg,rider_multi_bike,1732191,1732189:0.489;1732188:0.471;1732190:0.166,1732189
+train,a114f8b0-8bab2a05.jpg,target_much_larger_than_rider,1747680,1747681:0.202,1747681 (площадь цели / rider = 3.66)
+train,a18c14fc-3dd8ed7e.jpg,target_much_larger_than_rider,1751839,1751840:0.220,1751840 (площадь цели / rider = 3.47)
+train,a75944ab-a505db20.jpg,target_much_larger_than_rider,1818996,1818997:0.112,1818997 (площадь цели / rider = 6.05)
+train,a8c59486-8da1b07c.jpg,bike_multi_rider,1835484,1835481:0.324;1835482:0.167,1835481
+train,a8c59486-8da1b07c.jpg,rider_multi_bike,1835482,1835483:0.434;1835484:0.167,1835483
+train,ad09a5b3-9ec948da.jpg,bike_multi_rider,1882678,1882676:0.312;1882675:0.119,1882676
+train,ad09a5b3-9ec948da.jpg,rider_multi_bike,1882675,1882677:0.238;1882678:0.119,1882677
+train,b18ad0fa-20a661bf.jpg,target_much_larger_than_rider,1935756,1935759:0.192,1935759 (площадь цели / rider = 4.18)
+val,b368ee71-cf27b7fa.jpg,rider_multi_bike,17802,17804:0.246;17803:0.117,17804
+val,b633ed08-08a8b4ce.jpg,rider_multi_bike,50642,50643:0.541;50657:0.403,50643
+val,b79c1f8d-87a1881a.jpg,bike_multi_rider,66179,66178:0.609;66177:0.283,66178
+val,b953a340-298cb3fb.jpg,target_much_larger_than_rider,83992,83991:0.152,83991 (площадь цели / rider = 4.56)
+val,b9597719-4d141a98.jpg,bike_multi_rider,84300,84299:0.351;84298:0.240,84299
+val,b9e91422-2d610458.jpg,rider_multi_bike,89497,89500:0.240;89499:0.145,89500
+val,baf567e1-5ffa6b77.jpg,target_much_larger_than_rider,99993,99992:0.184,99992 (площадь цели / rider = 3.78)
+val,bafa2401-045c70c7.jpg,target_much_larger_than_rider,100147,100148:0.173,100148 (площадь цели / rider = 3.47)
+val,bb7792f1-e7ef3677.jpg,rider_multi_bike,105235,105223:0.386;105224:0.109,105223
+val,bb9071ac-4ee8ed8c.jpg,bike_multi_rider,106447,106446:0.279;106445:0.175,106446
+val,bbfe3b4f-5137ff9f.jpg,bike_multi_rider,112201,112199:0.387;112200:0.116,112199
+val,bbfe3b4f-5137ff9f.jpg,bike_multi_rider,112202,112200:0.356;112199:0.136,112200
+val,bbfe3b4f-5137ff9f.jpg,rider_multi_bike,112199,112201:0.387;112202:0.136,112201
+val,bbfe3b4f-5137ff9f.jpg,rider_multi_bike,112200,112202:0.356;112201:0.116,112202
+val,bc31a829-c73df3f7.jpg,target_much_larger_than_rider,114679,114678:0.193,114678 (площадь цели / rider = 3.86)
+val,bd82f517-d1af5063.jpg,bike_multi_rider,129228,129227:0.306;129225:0.110,129227
+val,bd82f517-d1af5063.jpg,rider_multi_bike,129225,129226:0.324;129228:0.110,129226
+val,bda1cdfa-5da26736.jpg,rider_multi_bike,130282,130283:0.234;130284:0.136,130283
+val,bf2c174a-547a550a.jpg,target_much_larger_than_rider,148641,148640:0.199,148640 (площадь цели / rider = 4.28)
+val,c0945c0c-e16c694a.jpg,target_much_larger_than_rider,163984,164002:0.103,164002 (площадь цели / rider = 6.69)
+val,c4528c24-144b8340.jpg,rider_multi_bike,207090,207091:0.423;207092:0.322,207091
+val,c7aa5575-7db02116.jpg,bike_multi_rider,247116,247113:0.271;247114:0.119,247113
+val,c7aa5575-7db02116.jpg,rider_multi_bike,247114,247115:0.306;247116:0.119,247115
+val,c9c778b5-83f9cec1.jpg,target_much_larger_than_rider,271460,271461:0.241,271461 (площадь цели / rider = 3.18)

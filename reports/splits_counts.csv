@@ -1,0 +1,7 @@
+dataset,part,images,clusters,clusters_with_objects,max_objects_in_cluster,images_with_objects,objects,objects_not_occluded
+bdd,train,59060,35578,1291,6,1349,1619,158
+bdd,calib,10799,6531,244,7,258,289,25
+bdd,test,10000,5931,212,7,223,267,24
+kitti,train,3974,103,17,145,371,498,498
+kitti,calib,1348,12,5,60,136,164,164
+kitti,test,2159,26,9,68,133,170,170

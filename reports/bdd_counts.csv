@@ -1,0 +1,11 @@
+split,step,images,objects
+train,all_images,69863,
+train,rider,3586,4517
+train,matched,2186,2581
+train,daytime,1644,1952
+train,min_height,1607,1908
+val,all_images,10000,
+val,rider,515,649
+val,matched,304,359
+val,daytime,229,279
+val,min_height,223,267
