@@ -2,6 +2,6 @@ dataset,part,images,images_with_targets,targets,ignore_regions,images_missing_on
 kitti,train,3974,371,498,5742,0,0
 kitti,calib,1348,136,164,2677,0,0
 kitti,test,2159,133,170,3671,0,0
-bdd,train,31086,1349,1619,1219,0,27974
+bdd,train,5349,1349,1619,321,0,27974
 bdd,calib,5639,258,289,204,0,5160
 bdd,test,5258,223,267,211,0,4742

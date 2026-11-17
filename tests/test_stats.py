@@ -9,7 +9,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from evaluate import Evaluation  # noqa: E402
-from stats import Run, analyse, decide  # noqa: E402
+from stats import Run, analyse, classify, decide  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 PCFG = yaml.safe_load((ROOT / "configs" / "protocol.yaml").read_text(encoding="utf-8"))
@@ -72,15 +72,18 @@ def make_runs(tmp_path, p_hit_t, p_hit_c, n_clusters=60, seeds=(1, 2, 3)):
         w = csv.writer(fh)
         w.writerow(["image", "cluster", "part"])
         w.writerows([(img, c, "test") for img, c in cl.items()])
-    return {"datasets": [ds], "bootstrap": {**PCFG["stats"]["bootstrap"], "replicas": 400, "chunk": 100}}
+    return {"datasets": [ds], "primary_datasets": [ds], "secondary_datasets": [],
+            "map": {**PCFG["stats"]["map"], "subset": "all"},          # в синтетике один вариант совокупности
+            "bootstrap": {**PCFG["stats"]["bootstrap"], "replicas": 400, "chunk": 100}}
 
 
 def test_clear_improvement_detected_identical_not(tmp_path):
     over = make_runs(tmp_path, 0.8, 0.8)
     rows, dec = analyse(tmp_path, PCFG, over, tag="t", report_dir=tmp_path, splits_dir=tmp_path)
     by = {(r["metric"], r["level"]): r for r in rows}
-    assert by[("recall", 0.9)]["decision"] == "improvement"          # 0.8·0.73 против 0.8·0.46
-    assert by[("recall", 0.9)]["ci_low"] > 0
+    # 0.8·0.73 против 0.8·0.46: разность ≈ 0.22 — практически значимое улучшение
+    assert by[("recall", 0.9)]["decision"] == "practically_significant"
+    assert by[("recall", 0.9)]["ci_low"] > PCFG["stats"]["practical_margin"]
     # на 0 % режимы одинаковы по построению, но выборки независимы: ΔAP ≈ 0, интервал — шириной в шум
     assert abs(by[("ap", 0.0)]["estimate"]) < 0.02
     assert (tmp_path / "stats_t.md").exists()
@@ -99,16 +102,57 @@ def test_no_difference_not_established(tmp_path):
             assert r["estimate"] == 0 and r["decision"] == "non_inferior"
 
 
+SCFG = {**PCFG["stats"], "datasets": ["x"], "primary_datasets": ["x"], "secondary_datasets": [],
+        "map": {**PCFG["stats"]["map"], "binding": True}}     # логику обязательного условия проверяем явно
+
+
+def rec(level, decision, baseline=0.5):
+    return {"dataset": "x", "metric": "recall", "level": level, "decision": decision, "value_control": baseline}
+
+
+AP_OK = {"dataset": "x", "metric": "ap", "level": 0.0, "decision": "non_inferior"}
+
+
+def test_classify_two_levels():
+    m = PCFG["stats"]["practical_margin"]
+    assert classify(m + 0.01, 0.3, m) == "practically_significant"
+    assert classify(0.01, 0.3, m) == "established"
+    assert classify(-0.2, -0.01, m) == "worse"
+    assert classify(-0.01, 0.2, m) == "not_established"
+
+
 def test_usefulness_level_is_contiguous_from_top():
-    scfg = {"datasets": ["x"]}
-    rows = [{"dataset": "x", "metric": "recall", "level": L, "decision": d}
-            for L, d in ((0.3, "improvement"), (0.5, "not_established"), (0.7, "improvement"), (0.9, "improvement"))]
-    rows.append({"dataset": "x", "metric": "ap", "level": 0.0, "decision": "non_inferior"})
-    d = decide(rows, scfg, PCFG)["x"]
-    assert d["improved_levels"] == [0.3, 0.7, 0.9] and d["usefulness_level"] == 0.7 and d["useful"]
+    rows = [rec(0.3, "established"), rec(0.5, "not_established"), rec(0.7, "established"),
+            rec(0.9, "practically_significant"), AP_OK]
+    d = decide(rows, SCFG, PCFG)["x"]
+    assert d["established_levels"] == [0.3, 0.7, 0.9] and d["usefulness_level"] == 0.7
+    assert d["hypothesis_confirmed"]                                # 90 % — practically_significant
 
 
-def test_map_condition_blocks_usefulness():
-    rows = [{"dataset": "x", "metric": "recall", "level": 0.9, "decision": "improvement"},
+def test_hypothesis_needs_practical_effect_at_50_70_90():
+    rows = [rec(0.3, "practically_significant"), rec(0.5, "established"), rec(0.7, "established"),
+            rec(0.9, "established"), AP_OK]
+    d = decide(rows, SCFG, PCFG)["x"]
+    assert d["usefulness_level"] == 0.3 and not d["hypothesis_confirmed"]
+
+
+def test_unmeasurable_level_excluded_from_usefulness():
+    # на 90 % Recall baseline < 0.05: уровень неизмерим, порог считается по 30–70 %
+    rows = [rec(0.3, "not_established"), rec(0.5, "established"), rec(0.7, "established"),
+            rec(0.9, "not_established", baseline=0.01), AP_OK]
+    d = decide(rows, SCFG, PCFG)["x"]
+    assert d["unmeasurable_levels"] == [0.9] and d["usefulness_level"] == 0.5
+
+
+def test_map_condition_blocks_hypothesis_unless_descriptive():
+    rows = [rec(0.9, "practically_significant"),
             {"dataset": "x", "metric": "ap", "level": 0.0, "decision": "not_established"}]
-    assert not decide(rows, {"datasets": ["x"]}, PCFG)["x"]["useful"]
+    assert not decide(rows, SCFG, PCFG)["x"]["hypothesis_confirmed"]
+    loose = {**SCFG, "map": {**SCFG["map"], "binding": False}}
+    assert decide(rows, loose, PCFG)["x"]["hypothesis_confirmed"]
+
+
+def test_secondary_dataset_is_descriptive():
+    rows = [rec(0.9, "practically_significant"), AP_OK]
+    d = decide(rows, {**SCFG, "primary_datasets": [], "secondary_datasets": ["x"]}, PCFG)["x"]
+    assert d["hypothesis_confirmed"] is None and d["practically_significant_levels"] == [0.9]

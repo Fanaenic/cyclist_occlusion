@@ -32,6 +32,11 @@ bdd:
   sources: {train: train, calib: train, test: val}
   image_size: [1280, 720]       # все изображения BDD100K — 1280x720
   timeofday: daytime            # кадры с другим временем суток в набор не входят (фильтр уровня изображения)
+  # Прореживание train (fix_plan, шаг 6): все кадры с целями + train_negatives случайных кадров без целей.
+  # Решение от 17.11.2026 (до основной серии): 4000 — около 3 пустых кадров на кадр с велосипедистом,
+  # ~2,2 ч обучения на модель вместо ~13 ч. Список кадров — splits/bdd_train_used.txt. calib и test не прореживаются.
+  train_negatives: 4000
+  thin_seed: 4243
   # Целевая рамка (rider или rider∪bike) берётся из selected_file; её тип задаётся в configs/bdd_filter.yaml.
   # См. reports/yolo_box_shapes.md.
   filter_config: configs/bdd_filter.yaml

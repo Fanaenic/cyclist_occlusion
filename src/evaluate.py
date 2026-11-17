@@ -213,18 +213,32 @@ def covered_fraction(box, masks):
     return float(grid.mean())
 
 
-def level_ground_truth(targets, ignores, masks, cfg, subset=None):
+def neighbor_covered(t, masks, cfg):
+    """Закрывают ли маски СОСЕДЕЙ цель t сильнее neighbor_mask_max_cover (masks — {object_id: маска} уровня)."""
+    others = [m for oid, m in masks.items() if oid != t["id"]]
+    return bool(others) and covered_fraction(t["box"], others) > cfg["matching"]["neighbor_mask_max_cover"]
+
+
+def valid_on_all_levels(targets, masks_by_level, cfg):
+    """id целей, которые ни на одном уровне не закрыты масками соседей сверх порога (основная совокупность)."""
+    bad = set()
+    for by_img in masks_by_level.values():
+        for img, ms in by_img.items():
+            bad |= {t["id"] for t in targets.get(img, []) if neighbor_covered(t, ms, cfg)}
+    return {t["id"] for ts in targets.values() for t in ts} - bad
+
+
+def level_ground_truth(targets, ignores, masks, cfg, subset=None, valid_ids=None):
     """targets: [{'id', 'box', 'occluded'}]; masks: {object_id: mask_box} для этого уровня.
 
-    Возвращает (рамки целей, рамки ignore, id целей). Цель уходит в ignore, если она вне подмножества
-    или маски СОСЕДЕЙ закрывают её сильнее neighbor_mask_max_cover.
+    Возвращает (рамки целей, рамки ignore, id целей). Цель уходит в ignore, если она вне подмножества,
+    вне valid_ids (основная совокупность — цели, валидные на всех уровнях) или маски СОСЕДЕЙ закрывают её
+    на этом уровне сильнее neighbor_mask_max_cover.
     """
-    lim = cfg["matching"]["neighbor_mask_max_cover"]
     keep, ign, ids = [], list(ignores), []
     for t in targets:
-        others = [m for oid, m in masks.items() if oid != t["id"]]
-        in_subset = subset is None or subset(t)
-        if not in_subset or (others and covered_fraction(t["box"], others) > lim):
+        in_subset = (subset is None or subset(t)) and (valid_ids is None or t["id"] in valid_ids)
+        if not in_subset or neighbor_covered(t, masks, cfg):
             ign.append(t["box"])
         else:
             keep.append(t["box"])
@@ -285,23 +299,75 @@ def read_predictions(path):
     return dets
 
 
-def run(ds, part, level, dets, cfg, ycfg, subset="all"):
-    images, targets, ignores, masks = load_gt(ds, part, ycfg)
+def ground_truth(ds, part, level, images, cfg, ycfg, subset="all", population=None, loaded=None):
+    """{img: (цели, ignore)} для части, уровня, подмножества и совокупности (matching.population).
+
+    population: all_levels — только цели, валидные на всех уровнях (остальные — ignore на всех уровнях);
+    per_level — цель исключается только на тех уровнях, где её закрывают маски соседей.
+    """
+    population = population or cfg["matching"]["population"]
+    _, targets, ignores, masks = loaded or load_gt(ds, part, ycfg)
+    valid = valid_on_all_levels(targets, masks, cfg) if population == "all_levels" else None
     gt = {}
     for img in images:
-        keep, ign, _ = level_ground_truth(targets[img], ignores[img], masks[level][img] if level > 0 else {},
-                                          cfg, SUBSETS[subset])
+        keep, ign, _ = level_ground_truth(targets.get(img, []), ignores.get(img, []),
+                                          masks[level][img] if level > 0 else {}, cfg, SUBSETS[subset], valid)
         gt[img] = (keep, ign)
+    return gt
+
+
+def population_report(cfg, ycfg, report_dir="reports"):
+    """Число целей основной совокупности (валидны на всех уровнях) и исключённых по уровням."""
+    rows = []
+    for ds in ("kitti", "bdd"):
+        for part in ("calib", "test"):
+            images, targets, _, masks = load_gt(ds, part, ycfg)
+            total = sum(len(v) for v in targets.values())
+            valid = valid_on_all_levels(targets, masks, cfg)
+            vis = sum(1 for ts in targets.values() for t in ts if not t["occluded"])
+            vis_valid = sum(1 for ts in targets.values() for t in ts if not t["occluded"] and t["id"] in valid)
+            per_level = {L: sum(neighbor_covered(t, masks[L].get(img, {}), cfg)
+                                for img, ts in targets.items() for t in ts) for L in sorted(masks)}
+            rows.append({"dataset": ds, "part": part, "targets": total, "valid_all_levels": len(valid),
+                         "not_occluded": vis, "not_occluded_valid_all_levels": vis_valid,
+                         **{f"excluded_at_{int(L * 100)}": n for L, n in per_level.items()}})
+    rep = Path(report_dir)
+    with open(rep / "population.csv", "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        w.writeheader()
+        w.writerows(rows)
+    lv = [k for k in rows[0] if k.startswith("excluded_at_")]
+    lines = ["# Совокупность целей для кривой деградации", "",
+             f"Основная совокупность (`matching.population: {cfg['matching']['population']}`): цели, которые ни на одном "
+             f"уровне не закрыты масками соседей сверх {cfg['matching']['neighbor_mask_max_cover']:.0%} площади; "
+             "остальные — ignore на всех уровнях. Так кривая 0→90 % строится по одним и тем же объектам. "
+             "Вариант «по уровню» (исключение только на своём уровне) — дополнительный отчёт.", "",
+             "| датасет | часть | целей | основная совокупность | occluded=false | occluded=false в основной | "
+             + " | ".join(f"исключено по уровню {k.split('_')[-1]} %" for k in lv) + " |",
+             "|---|---|---|---|---|---|" + "---|" * len(lv)]
+    lines += [f"| {r['dataset']} | {r['part']} | {r['targets']} | {r['valid_all_levels']} | {r['not_occluded']} | "
+              f"{r['not_occluded_valid_all_levels']} | " + " | ".join(str(r[k]) for k in lv) + " |" for r in rows]
+    (rep / "population.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("\n".join(lines))
+    return rows
+
+
+def run(ds, part, level, dets, cfg, ycfg, subset="all", population=None):
+    images = load_gt(ds, part, ycfg)[0]
+    gt = ground_truth(ds, part, level, images, cfg, ycfg, subset, population)
     ev, _ = evaluate(dets, gt, images, cfg)
     return ev
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dataset", choices=["kitti", "bdd"], required=True)
-    ap.add_argument("--part", choices=["calib", "test"], required=True)
+    ap.add_argument("--dataset", choices=["kitti", "bdd"])
+    ap.add_argument("--part", choices=["calib", "test"])
     ap.add_argument("--level", type=float, default=0.0)
     ap.add_argument("--subset", choices=list(SUBSETS), default="all")
+    ap.add_argument("--population", choices=["all_levels", "per_level"], help="по умолчанию — из протокола")
+    ap.add_argument("--population-report", action="store_true",
+                    help="только посчитать основную совокупность целей -> reports/population.*")
     ap.add_argument("--pred", help="CSV image,x1,y1,x2,y2,score")
     ap.add_argument("--gt-as-pred", action="store_true", help="подставить цели как детекции (проверка конвейера)")
     ap.add_argument("--threshold", type=float, help="замороженный порог confidence")
@@ -314,14 +380,20 @@ def main():
         cfg = yaml.safe_load(fh)
     with open(args.yolo_config, encoding="utf-8") as fh:
         ycfg = yaml.safe_load(fh)
+    if args.population_report:
+        population_report(cfg, ycfg)
+        return
+    if not (args.dataset and args.part):
+        ap.error("нужны --dataset и --part")
 
     if args.gt_as_pred:
         _, targets, _, _ = load_gt(args.dataset, args.part, ycfg)
         dets = {img: [(*t["box"], 0.9) for t in ts] for img, ts in targets.items()}
     else:
         dets = read_predictions(args.pred)
-    ev = run(args.dataset, args.part, args.level, dets, cfg, ycfg, args.subset)
+    ev = run(args.dataset, args.part, args.level, dets, cfg, ycfg, args.subset, args.population)
     out = {"dataset": args.dataset, "part": args.part, "level": args.level, "subset": args.subset,
+           "population": args.population or cfg["matching"]["population"],
            "images": ev.n_images, "targets": ev.n_targets, "ap50": ev.ap(),
            "recall_at_target_fppi_curve": ev.recall_at_fppi(cfg["metrics"]["target_fppi"])}
     if args.calibrate:

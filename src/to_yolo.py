@@ -121,9 +121,23 @@ def bdd_records(cfg, limit):
                     ig.append((matched_box.get(lid, bdd_box(lb)), f"{lb['category']}_filtered", lb))
             img = Path(c["image_dir"].format(source=src)) / name
             recs.append((img, W, H, tg, ig))
+        if part == "train" and c.get("train_negatives") is not None and not limit:
+            recs = thin_negatives(recs, c["train_negatives"], c["thin_seed"], Path(cfg["splits_dir"]) / "bdd_train_used.txt")
         out[part] = recs
         out[f"_{part}_dropped"] = dropped
     return out
+
+
+def thin_negatives(recs, n_neg, seed, list_path):
+    """Все кадры с целями + n_neg случайных кадров без целей (seed фиксирован); список — в splits/."""
+    pos = [r for r in recs if r[3]]
+    neg = sorted((r for r in recs if not r[3]), key=lambda r: Path(r[0]).name)
+    pick = np.random.default_rng(seed).choice(len(neg), size=min(n_neg, len(neg)), replace=False)
+    kept = pos + [neg[i] for i in sorted(pick)]
+    list_path.write_text("\n".join(sorted(Path(r[0]).name for r in kept)) + "\n", encoding="utf-8")
+    print(f"bdd train: кадров с целями {len(pos)}, без целей {len(neg)} -> оставлено {min(n_neg, len(neg))}; "
+          f"итого {len(kept)} -> {list_path}")
+    return kept
 
 
 # ---------------------------------------------------------------- запись

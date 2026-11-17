@@ -1,0 +1,5 @@
+dataset,part,targets,valid_all_levels,not_occluded,not_occluded_valid_all_levels,excluded_at_30,excluded_at_50,excluded_at_70,excluded_at_90
+kitti,calib,164,160,164,160,0,0,1,4
+kitti,test,170,170,170,170,0,0,0,0
+bdd,calib,289,281,25,25,0,3,4,8
+bdd,test,267,262,24,24,1,2,4,5

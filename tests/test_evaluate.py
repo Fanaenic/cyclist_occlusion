@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from evaluate import (Evaluation, compare_fppi_rule, covered_fraction, evaluate,  # noqa: E402
+from evaluate import (Evaluation, compare_fppi_rule, covered_fraction, evaluate, valid_on_all_levels,  # noqa: E402
                       level_ground_truth, match_image, nms)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -130,6 +130,21 @@ def test_neighbor_mask_moves_target_to_ignore():
     masks = {"a": (2, 0, 9, 10), "b": (12, 0, 15, 10)}       # маска a закрывает 40 % рамки b
     keep, ign, ids = level_ground_truth([a, b], [], masks, CFG)
     assert ids == ["a"] and b["box"] in ign
+
+
+def test_population_all_levels_excludes_target_on_every_level():
+    a = {"id": "a", "box": (0, 0, 10, 10), "occluded": False}
+    b = {"id": "b", "box": (5, 0, 15, 10), "occluded": False}
+    masks_by_level = {0.3: {"img": {"a": (0, 0, 3, 10), "b": (12, 0, 15, 10)}},   # на 30 % соседи не мешают
+                      0.9: {"img": {"a": (1, 0, 10, 10), "b": (6, 0, 15, 10)}}}   # на 90 % — мешают обоим
+    valid = valid_on_all_levels({"img": [a, b]}, masks_by_level, CFG)
+    assert valid == set()
+    # на 30 % цели закрыты только своими масками, но в основной совокупности они ignore и на этом уровне
+    keep, ign, ids = level_ground_truth([a, b], [], masks_by_level[0.3]["img"], CFG, valid_ids=valid)
+    assert ids == [] and len(ign) == 2
+    # вариант «по уровню»: на 30 % обе цели остаются
+    keep, ign, ids = level_ground_truth([a, b], [], masks_by_level[0.3]["img"], CFG)
+    assert ids == ["a", "b"]
 
 
 def test_subset_moves_occluded_to_ignore():

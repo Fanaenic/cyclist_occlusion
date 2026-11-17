@@ -1,15 +1,19 @@
 # Обучение YOLOv8n и прогон всего конвейера (src/run_experiment.py).
 # Режимы и параметры масок обучения — configs/masks.yaml (раздел training); протокол оценки — configs/protocol.yaml.
 
-# Начальные веса. yolov8n.yaml — обучение с нуля, ничего не скачивается (для технического прогона).
-# Для основной серии планируется yolov8n.pt (предобучение на COCO): файл скачивается с GitHub Ultralytics
-# только после явного разрешения и кладётся в weights/.
-model: yolov8n.yaml
+# Начальные веса: YOLOv8n, предобученная на COCO (80 классов; голова заменяется на 1 класс Cyclist).
+# Источник: https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt (скачано 17.11.2026),
+# SHA-256 f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36. weights/ — в .gitignore.
+# Обучение с нуля — model: yolov8n.yaml.
+model: weights/yolov8n.pt
 
 imgsz: 640
 batch: 16
 epochs: 100            # основная серия; для smoke test — см. smoke.epochs
-workers: 0             # 0 — детерминированный порядок и маски обучения на Windows
+# Маски обучения зависят только от (seed, изображение, эпоха) — src/occlusion_train.py, EpochSampler.
+# Проверено 17.11.2026: два запуска с workers 8 и mosaic дали одинаковые журналы масок (reports/workers_check.md);
+# одна эпоха KITTI train: 101 с при workers 0, 54 с при workers 8.
+workers: 8
 deterministic: true
 amp: true
 plots: false
@@ -18,7 +22,7 @@ plots: false
 val: false
 offline: true          # YOLO_OFFLINE=1: Ultralytics ничего не скачивает
 
-regimes: [baseline, proposed, ore]
+regimes: [baseline, proposed, ore, proposed_noise]   # proposed_noise — абляция утечки признака
 seeds: [1, 2, 3]
 datasets: [kitti, bdd]
 

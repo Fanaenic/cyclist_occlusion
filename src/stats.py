@@ -127,24 +127,48 @@ def percentile_ci(x, level):
 
 # ---------------------------------------------------------------- правило решения
 
+ESTABLISHED = ("established", "practically_significant")
+
+
+def classify(lo, hi, margin):
+    """Решение по скорректированному интервалу Δ_R (protocol.yaml, stats)."""
+    if lo > margin:
+        return "practically_significant"
+    if lo > 0:
+        return "established"
+    if hi < 0:
+        return "worse"
+    return "not_established"
+
+
 def decide(rows, scfg, pcfg):
-    """rows — проверки одного сравнения treatment vs control. Возвращает решение по датасетам и итог."""
+    """rows — проверки одного сравнения treatment vs control. Возвращает решение по каждому датасету.
+
+    Основной датасет (primary_datasets): гипотеза подтверждена, если условие mAP выполнено (когда оно обязательное)
+    и хотя бы на одном уровне из hypothesis_levels — practically_significant. Вторичный — те же величины
+    с пометкой «описательно», гипотеза по нему не проверяется.
+    """
     res = {}
+    binding = scfg["map"].get("binding", True)
     for ds in scfg["datasets"]:
-        rec = [r for r in rows if r["dataset"] == ds and r["metric"] == "recall"]
+        rec = sorted((r for r in rows if r["dataset"] == ds and r["metric"] == "recall"), key=lambda r: r["level"])
         mp = next((r for r in rows if r["dataset"] == ds and r["metric"] == "ap"), None)
-        improved = sorted(r["level"] for r in rec if r["decision"] == "improvement")
-        # «порог полезности» — наименьший уровень сетки, начиная с которого улучшение есть на нём и на всех
-        # бо́льших уровнях; это точка сетки, а не непрерывный порог (см. text/stats.md)
-        levels = sorted(r["level"] for r in rec)
-        thr_level = None
-        for L in levels:
-            if all(x in improved for x in levels if x >= L):
-                thr_level = L
-                break
-        res[ds] = {"map_ok": bool(mp and mp["decision"] == "non_inferior"), "improved_levels": improved,
-                   "usefulness_level": thr_level}
-        res[ds]["useful"] = res[ds]["map_ok"] and bool(improved)
+        established = [r["level"] for r in rec if r["decision"] in ESTABLISHED]
+        practical = [r["level"] for r in rec if r["decision"] == "practically_significant"]
+        measurable = [r["level"] for r in rec if r["value_control"] >= scfg["min_baseline_recall"]]
+        # «порог полезности» — наименьший ИЗМЕРИМЫЙ уровень сетки, начиная с которого эффект established на нём
+        # и на всех бо́льших измеримых уровнях; это точка сетки, а не непрерывный порог (см. text/stats.md)
+        thr_level = next((L for L in measurable if all(x in established for x in measurable if x >= L)), None)
+        map_ok = bool(mp and mp["decision"] == "non_inferior")
+        primary = ds in scfg["primary_datasets"]
+        d = {"role": "primary" if primary else "secondary (descriptive)",
+             "map_ok": map_ok, "map_binding": binding,
+             "established_levels": established, "practically_significant_levels": practical,
+             "unmeasurable_levels": [r["level"] for r in rec if r["level"] not in measurable],
+             "usefulness_level": thr_level}
+        hyp = (map_ok or not binding) and any(L in practical for L in scfg["hypothesis_levels"])
+        d["hypothesis_confirmed"] = hyp if primary else None
+        res[ds] = d
     return res
 
 
@@ -164,15 +188,18 @@ def analyse(runs_dir, pcfg, scfg_override=None, tag="main", report_dir="reports"
         evaluated = {str(i) for i in np.load(first)["images"]}
         cluster_of, clusters = load_clusters(Path(splits_dir) / f"{ds}_clusters.csv", evaluated)
 
-        def runs(regime, level):
-            return [Run(runs_dir / f"{ds}__{regime}__s{s}__L{level}__{scfg['subset']}.npz", cluster_of, clusters)
+        def runs(regime, level, subset=scfg["subset"]):
+            return [Run(runs_dir / f"{ds}__{regime}__s{s}__L{level}__{subset}.npz", cluster_of, clusters)
                     for s in scfg["seeds"]]
 
         thr_t = [thresholds[f"{ds}__{treatment}__s{s}"] for s in scfg["seeds"]]
         thr_c = [thresholds[f"{ds}__{control}__s{s}"] for s in scfg["seeds"]]
         checks = [("recall", L) for L in scfg["recall_levels"]] + [("ap", scfg["map"]["level"])]
         for metric, level in checks:
-            rt, rc = runs(treatment, level), runs(control, level)
+            # AP при 0 % — по всем целям test (map.subset), Recall — по основной совокупности (subset)
+            sub = scfg["map"].get("subset", scfg["subset"]) if metric == "ap" and scfg["subset"] == "all" \
+                else scfg["subset"]
+            rt, rc = runs(treatment, level, sub), runs(control, level, sub)
             est, delta, means = bootstrap(rt, rc, thr_t, thr_c, len(clusters), scfg, rng=rng)
             row = {"dataset": ds, "metric": metric, "level": level, "treatment": treatment, "control": control,
                    "value_treatment": float(means[metric][0]), "value_control": float(means[metric][1]),
@@ -184,7 +211,6 @@ def analyse(runs_dir, pcfg, scfg_override=None, tag="main", report_dir="reports"
                 row.update(ci_level=lvl, ci_low=lo, ci_high=hi)
                 gap = abs(row["fppi_treatment"] - row["fppi_control"])
                 row["fppi_gap"] = gap
-                ok = lo > 0
                 if gap > tol:
                     # правило разного FPPI: та же проверка при равном бюджете max(FPPI_t, FPPI_c)
                     budget = max(row["fppi_treatment"], row["fppi_control"])
@@ -192,13 +218,16 @@ def analyse(runs_dir, pcfg, scfg_override=None, tag="main", report_dir="reports"
                     lo_b, hi_b = percentile_ci(delta_b["recall_budget"], lvl)
                     row.update(budget=budget, estimate_budget=est_b["recall_budget"], ci_low_budget=lo_b,
                                ci_high_budget=hi_b)
-                    ok = ok and lo_b > 0
-                row["decision"] = "improvement" if ok else ("worse" if row["ci_high"] < 0 else "not_established")
+                    # преимущество засчитывается, только если сохраняется и при равном бюджете FPPI
+                    lo = min(lo, lo_b)
+                row["decision"] = classify(lo, hi, scfg["practical_margin"])
+                row["descriptive"] = ds not in scfg["primary_datasets"]
             else:
                 lvl = 1 - 2 * alpha              # двусторонний (1 − 2α) = односторонняя нижняя граница (1 − α)
                 lo, hi = percentile_ci(delta["ap"], lvl)
                 row.update(ci_level=1 - alpha, ci_low=lo, ci_high=float("inf"))
                 row["decision"] = "non_inferior" if lo > -scfg["map"]["margin"] else "not_established"
+                row["descriptive"] = ds not in scfg["primary_datasets"] or not scfg["map"].get("binding", True)
             rows.append(row)
     decision = decide(rows, scfg, pcfg)
     write_reports(rows, decision, scfg, tag, Path(report_dir))
@@ -216,24 +245,37 @@ def write_reports(rows, decision, scfg, tag, rep):
     lines = [f"# Статистика: {rows[0]['treatment']} против {rows[0]['control']} ({tag})", "",
              f"Бутстрэп: {b['replicas']} реплик, кластеры test + seed {scfg['seeds']} "
              f"({'перевыбираются' if b['resample_seeds'] else 'фиксированы'}), интервал `{scfg['interval']}`. "
-             f"Recall: двусторонний {1 - scfg['alpha'] / scfg['bonferroni_m']:.4%} (Бонферрони, m = {scfg['bonferroni_m']}). "
-             f"AP@0.5: односторонняя нижняя граница {1 - scfg['alpha']:.0%}, допуск −{scfg['map']['margin']}.", "",
+             f"Recall: двусторонний {1 - scfg['alpha'] / scfg['bonferroni_m']:.4%} (Бонферрони, m = {scfg['bonferroni_m']} "
+             f"уровней основного датасета {', '.join(scfg['primary_datasets'])}); practically_significant — нижняя "
+             f"граница > {scfg['practical_margin']}. AP@0.5: односторонняя нижняя граница {1 - scfg['alpha']:.0%}, "
+             f"допуск −{scfg['map']['margin']}"
+             + ("" if scfg["map"].get("binding", True) else " (условие описательное, в правило не входит)") + ". "
+             f"Вторичные датасеты ({', '.join(scfg['secondary_datasets'])}) — описательно, в итоговое правило не входят.",
+             "",
              "| датасет | метрика | уровень | treatment | control | Δ | интервал | FPPI t / c | решение |",
              "|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         ci = f"[{r['ci_low']:+.3f}; {r['ci_high']:+.3f}]" if np.isfinite(r["ci_high"]) else f"[{r['ci_low']:+.3f}; +∞)"
         if "budget" in r:
             ci += f"; при FPPI {r['budget']:.3f}: [{r['ci_low_budget']:+.3f}; {r['ci_high_budget']:+.3f}]"
+        mark = " (описательно)" if r.get("descriptive") else ""
         lines.append(f"| {r['dataset']} | {r['metric']} | {r['level']:.0%} | {r['value_treatment']:.3f} | "
                      f"{r['value_control']:.3f} | {r['estimate']:+.3f} | {ci} | "
-                     f"{r['fppi_treatment']:.3f} / {r['fppi_control']:.3f} | {r['decision']} |")
+                     f"{r['fppi_treatment']:.3f} / {r['fppi_control']:.3f} | {r['decision']}{mark} |")
     lines += ["", "## Решение", ""]
+    pct = lambda xs: ", ".join(f"{x:.0%}" for x in xs) or "нет"
     for ds, d in decision.items():
-        lv = ", ".join(f"{x:.0%}" for x in d["improved_levels"]) or "нет"
         ul = f"{d['usefulness_level']:.0%}" if d["usefulness_level"] is not None else "не установлен"
-        lines.append(f"- **{ds}**: условие mAP {'выполнено' if d['map_ok'] else 'НЕ выполнено'}; улучшение Recall "
-                     f"на уровнях: {lv}; порог полезности (точка сетки): {ul}; итог: "
-                     f"{'режим полезен' if d['useful'] else 'полезность не установлена'}.")
+        if d["hypothesis_confirmed"] is None:
+            verdict = "описательно, гипотеза по этому датасету не проверяется"
+        else:
+            verdict = "гипотеза подтверждена" if d["hypothesis_confirmed"] else "гипотеза не подтверждена"
+        lines.append(f"- **{ds}** ({d['role']}): условие mAP {'выполнено' if d['map_ok'] else 'НЕ выполнено'}"
+                     f"{'' if d['map_binding'] else ' (описательно)'}; established: {pct(d['established_levels'])}; "
+                     f"practically_significant: {pct(d['practically_significant_levels'])}; "
+                     f"неизмеримые уровни (Recall baseline < {scfg['min_baseline_recall']}): "
+                     f"{pct(d['unmeasurable_levels'])}; порог полезности (точка сетки, по измеримым уровням): {ul}; "
+                     f"итог: {verdict}.")
     (rep / f"stats_{tag}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

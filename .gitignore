@@ -1,16 +1,54 @@
-# Сырые данные: не коммитить
+# ---------------------------------------------------------------- данные и артефакты проекта
+# Сырые данные (KITTI, BDD100K) — скачиваются отдельно, см. README
 data/
-
-# Окружение и кэши
-.venv/
-__pycache__/
-*.pyc
-.pytest_cache/
-
-# Артефакты обучения Ultralytics
-runs/
-*.pt
+# YOLO-набор: жёсткие ссылки на изображения + разметка, собирается src/to_yolo.py
 datasets_yolo/
+# Обучение, детекции, логи прогонов
+runs/
+# Веса моделей
+weights/
+*.pt
+*.pth
+*.onnx
+*.engine
 
-# Временные файлы Word
-~$*.docx
+# ---------------------------------------------------------------- не код: задания и инструкции для Claude
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+fix_plan.md
+# ---------------------------------------------------------------- Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Окружения
+.venv/
+venv/
+env/
+.env
+
+# Тесты и проверки
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ---------------------------------------------------------------- редакторы и ОС
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Временные файлы Office
+~$*
+*.tmp

@@ -83,10 +83,26 @@ def test_proposed_levels_and_probability():
 
 # ---------------------------------------------------------------- заливка фоном и приманки
 
-from masks import apply_training_masks, pick_background  # noqa: E402
+from masks import apply_training_masks, pick_background, pick_like_targets  # noqa: E402
+
+
+def test_pick_like_targets_stays_in_target_spans_and_avoids_boxes():
+    rng = np.random.default_rng(0)
+    avoid = [(0, 150, 300, 200)]
+    spans = [[0.3, 0.6], [0.7, 0.9]]                    # диапазоны целей: 90..180 и 210..270 пикселей при H = 300
+    for _ in range(200):
+        x0, y0, clean = pick_like_targets(400, 300, 30, 40, avoid, rng, 200, spans)
+        assert clean and inter((x0, y0, x0 + 30, y0 + 40), avoid[0]) == 0
+        assert 90 <= y0 and y0 + 40 <= 180 or 210 <= y0 and y0 + 40 <= 270
+
+
+def test_pick_like_targets_patch_taller_than_span_is_bottom_aligned():
+    x0, y0, _ = pick_like_targets(400, 300, 20, 100, [], np.random.default_rng(0), 10, [[0.5, 0.6]])
+    assert y0 + 100 == 180
 
 BG_CFG = {
     "shape": SHAPE, "neighbors": NB, "fill": {"mode": "background"}, "background": {"max_tries": 200},
+    "placement": {"mode": "like_targets"},
     "training": {"proposed": {"p": 1.0, "levels": [0.5], "weights": [1], "decoys": True},
                  "ore": {"p": 1.0, "area": [0.1, 0.3], "aspect_ratio": [0.5, 2.0], "max_tries": 100, "decoys": True}},
 }
@@ -111,10 +127,12 @@ def test_apply_mask_background_copies_source():
 def test_training_decoys_match_masks_and_stay_on_background(regime):
     img = np.random.default_rng(1).integers(0, 255, (300, 600, 3), dtype=np.uint8)
     boxes = [(100, 100, 140, 180), (300, 120, 330, 170)]
-    out, masks, decoys = apply_training_masks(img, boxes, np.random.default_rng(2), regime, BG_CFG)
+    spans = [[100 / 300, 180 / 300], [120 / 300, 170 / 300]]                # диапазоны целей, доли высоты
+    out, masks, decoys = apply_training_masks(img, boxes, np.random.default_rng(2), regime, BG_CFG, spans)
     assert len(masks) == len(decoys) == 2
     for m, d in zip(masks, decoys):
         assert (m[2] - m[0], m[3] - m[1]) == (d[2] - d[0], d[3] - d[1])     # приманка того же размера
         assert all(inter(d, b) == 0 for b in boxes)                         # и не на целях
+        assert 100 <= d[1] and d[3] <= 180                                  # по высоте — в пределах целей
     assert any(inter(m, b) == area(m) for m in masks for b in boxes)        # маски — внутри рамок
     assert not np.array_equal(out, img)

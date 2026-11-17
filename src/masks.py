@@ -3,13 +3,16 @@
 Библиотечная часть (используется при обучении и оценке):
   pixel_box, make_mask, apply_mask         — маска на заданную долю площади рамки
   sample_training_mask, random_erasing_ore — режимы обучения proposed и ORE
+  apply_training_masks, place_patch        — маски обучения и приманки в типичном для целей положении
 
 Командная часть:
-  generate  — один раз построить маски для calib/test и сохранить в splits/masks_{ds}_{part}.csv
+  generate  — один раз построить маски и контрольные заплатки для calib/test -> splits/{masks,control}_{ds}_{part}.csv
   check     — программно проверить фактическую долю перекрытия и соседей -> reports/masks_check.*
   examples  — картинки каждого уровня 0/30/50/70/90 % и режимов обучения -> reports/examples/
+  placement — гистограммы положения и размера: цели / маски / приманки / контроль -> reports/placement.*
 
-Запуск: python src/masks.py {generate,check,examples} [--config configs/masks.yaml] [--dataset kitti|bdd] [--limit N]
+Запуск: python src/masks.py {generate,check,examples,placement} [--config configs/masks.yaml] [--dataset kitti|bdd]
+        [--limit N]
 """
 import argparse
 import csv
@@ -124,6 +127,40 @@ def pick_background(W, H, w, h, avoid, rng, tries):
     return best[0], best[1], best[2] == 0
 
 
+def pick_like_targets(W, H, w, h, avoid, rng, tries, span_pool):
+    """Положение заплатки w x h, как у масок на реальных целях: берётся вертикальный диапазон [y1, y2] случайной
+    цели train (span_pool — пары в долях высоты кадра), заплатка ставится в него по вертикали равномерно
+    (если выше диапазона — по нижнему краю), x — равномерно по кадру; вне рамок avoid.
+
+    Возвращает (x0, y0, clean): clean = False, если чистого места не нашлось (берётся с наименьшим пересечением).
+    """
+    w, h = min(w, W), min(h, H)
+    pool = np.asarray(span_pool, dtype=float)
+    fits = pool[(pool[:, 1] - pool[:, 0]) * H >= h]       # диапазоны целей, в которые заплатка помещается
+    pool = fits if len(fits) else pool
+    best = None
+    for _ in range(tries):
+        y1, y2 = pool[int(rng.integers(0, len(pool)))]
+        t0, t1 = int(round(y1 * H)), int(round(y2 * H))
+        y0 = int(rng.integers(t0, t1 - h + 1)) if t1 - t0 >= h else t1 - h
+        y0 = min(max(y0, 0), H - h)
+        x0 = int(rng.integers(0, W - w + 1))
+        ov = sum(inter((x0, y0, x0 + w, y0 + h), a) for a in avoid)
+        if best is None or ov < best[2]:
+            best = (x0, y0, ov)
+        if ov == 0:
+            break
+    return best[0], best[1], best[2] == 0
+
+
+def place_patch(W, H, w, h, avoid, rng, cfg, span_pool):
+    """Положение приманки / контрольной заплатки по правилу placement.mode из configs/masks.yaml."""
+    tries = cfg["background"]["max_tries"]
+    if cfg["placement"]["mode"] == "like_targets":
+        return pick_like_targets(W, H, w, h, avoid, rng, tries, span_pool)
+    return pick_background(W, H, w, h, avoid, rng, tries)
+
+
 def apply_mask(img, m, fill_cfg, mask_seed, src=None, source_img=None):
     """Закрыть прямоугольник m на копии изображения.
 
@@ -175,18 +212,10 @@ def random_erasing_ore(box, rng, ore):
     return None
 
 
-def apply_training_masks(img, boxes, rng, regime, cfg):
-    """Маски режима обучения на всех целях кадра + столько же заплаток-приманок на фоне.
-
-    boxes — пиксельные рамки целей; regime — "proposed" или "ore"; cfg — весь configs/masks.yaml.
-    Приманка — участок того же размера, что маска, вне рамок целей, закрытый так же (фоном из другого места).
-    Так присутствие заплатки не указывает на класс объекта (иначе модель учится находить заплатку).
-    Возвращает (изображение, список масок, список приманок).
-    """
+def training_geometry(boxes, W, H, rng, regime, cfg, span_pool=None):
+    """Маски режима обучения на целях и приманки (без изображения). Возвращает (маски, приманки)."""
     rcfg = cfg["training"][regime]
-    H, W = img.shape[:2]
-    tries = cfg["background"]["max_tries"]
-    out, masks, decoys = img.copy(), [], []
+    masks, decoys = [], []
     for i, b in enumerate(boxes):
         if regime == "ore":
             m = random_erasing_ore(b, rng, rcfg)
@@ -195,15 +224,33 @@ def apply_training_masks(img, boxes, rng, regime, cfg):
             m = sample_training_mask(b, rng, rcfg, cfg["shape"], nbs, cfg["neighbors"])
         if m:
             masks.append(m)
-    for m in masks:
-        w, h = m[2] - m[0], m[3] - m[1]
-        if rcfg.get("decoys", True):
-            dx, dy, _ = pick_background(W, H, w, h, list(boxes) + decoys, rng, tries)
+    if rcfg.get("decoys", True):
+        for m in masks:
+            w, h = m[2] - m[0], m[3] - m[1]
+            dx, dy, _ = place_patch(W, H, w, h, list(boxes) + decoys, rng, cfg, span_pool)
             decoys.append((dx, dy, dx + w, dy + h))
+    return masks, decoys
+
+
+def apply_training_masks(img, boxes, rng, regime, cfg, span_pool=None):
+    """Маски режима обучения на всех целях кадра + столько же заплаток-приманок на фоне.
+
+    boxes — пиксельные рамки целей; regime — "proposed", "ore" или "proposed_noise"; cfg — весь configs/masks.yaml;
+    span_pool — диапазоны [y1, y2] целей train (доли высоты кадра) для размещения приманок (placement.mode: like_targets).
+    Приманка — участок того же размера, что маска, вне рамок целей, в типичном для целей положении,
+    закрытый так же (фоном из другого места). Так присутствие заплатки не указывает на класс объекта.
+    Заливка — training.<режим>.fill, если задана (proposed_noise: шум), иначе общая fill.
+    Возвращает (изображение, список масок, список приманок).
+    """
+    H, W = img.shape[:2]
+    tries = cfg["background"]["max_tries"]
+    fill = cfg["training"][regime].get("fill", cfg["fill"])
+    out = img.copy()
+    masks, decoys = training_geometry(boxes, W, H, rng, regime, cfg, span_pool)
     for m in masks + decoys:
         w, h = m[2] - m[0], m[3] - m[1]
         src = pick_background(W, H, w, h, list(boxes) + [m], rng, tries)[:2]
-        out = apply_mask(out, m, cfg["fill"], int(rng.integers(0, 2**31 - 1)), src, img)
+        out = apply_mask(out, m, fill, int(rng.integers(0, 2**31 - 1)), src, img)
     return out, masks, decoys
 
 
@@ -271,11 +318,28 @@ def image_size(cfg, ds, part, img):
         return im.size
 
 
+def target_span_pool(cfg, ds):
+    """Вертикальные диапазоны [y1, y2] целевых рамок части pool_part в долях высоты кадра
+    (кэш — splits/target_spans_{ds}.json)."""
+    path = Path(cfg["placement"]["pool_file"].format(dataset=ds))
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))["spans"]
+    part = cfg["placement"]["pool_part"]
+    targets, _, _ = LOADERS[ds](cfg, part)
+    spans = []
+    for img, _, box in sorted(targets):
+        H = image_size(cfg, ds, part, img)[1]
+        spans.append([round(box[1] / H, 5), round(box[3] / H, 5)])
+    path.write_text(json.dumps({"dataset": ds, "part": part, "n": len(spans), "spans": spans}), encoding="utf-8")
+    return spans
+
+
 # ---------------------------------------------------------------- команды
 
 def generate(cfg, ds, limit):
     seed = cfg["fixed_masks"]["seed"]
     out = Path(cfg["splits_dir"])
+    span_pool = target_span_pool(cfg, ds)
     for part in cfg["fixed_masks"]["parts"]:
         targets, boxes, own_bike = LOADERS[ds](cfg, part)
         targets.sort()
@@ -305,9 +369,9 @@ def generate(cfg, ds, limit):
                     "sx": sx, "sy": sy, "src_clean": clean,
                 })
                 if level == cfg["control"]["level"]:
-                    # заплатка того же размера на фоне (вне всех рамок) и источник её заливки
+                    # заплатка того же размера на фоне (вне всех рамок, положение — как у целей) и источник заливки
                     w_, h_ = m[2] - m[0], m[3] - m[1]
-                    dx, dy, ok1 = pick_background(W, H, w_, h_, all_boxes, rng, tries)
+                    dx, dy, ok1 = place_patch(W, H, w_, h_, all_boxes, rng, cfg, span_pool)
                     d = (dx, dy, dx + w_, dy + h_)
                     cx, cy, ok2 = pick_background(W, H, w_, h_, all_boxes + [d], rng, tries)
                     control.append({"dataset": ds, "part": part, "image": img, "object_id": oid,
@@ -324,6 +388,128 @@ def generate(cfg, ds, limit):
             w.writerows(control)
         print(f"{ds} {part}: {len(targets)} объектов x {len(cfg['levels'])} уровней -> {path}; "
               f"контрольных заплаток: {len(control)}")
+
+
+def check_control(cfg, datasets):
+    """Контрольные заплатки: внутри кадра, вне всех рамок, по вертикали — в пределах [min y1, max y2] целей train."""
+    rows = []
+    for ds in datasets:
+        pool = target_span_pool(cfg, ds)
+        lo, hi = min(s[0] for s in pool), max(s[1] for s in pool)
+        for part in cfg["fixed_masks"]["parts"]:
+            path = Path(cfg["splits_dir"]) / f"control_{ds}_{part}.csv"
+            if not path.exists():
+                continue
+            _, boxes, _ = LOADERS[ds](cfg, part)
+            n = outside = on_object = y2_out = 0
+            with open(path, encoding="utf-8") as fh:
+                for r in csv.DictReader(fh):
+                    d = tuple(int(r[k]) for k in ("dx0", "dy0", "dx1", "dy1"))
+                    W, H = image_size(cfg, ds, part, r["image"])
+                    n += 1
+                    outside += not (d[0] >= 0 and d[1] >= 0 and d[2] <= W and d[3] <= H)
+                    on_object += any(inter(d, b) for _, b in boxes[r["image"]])
+                    y2_out += not (d[1] / H >= lo - 1 / H and d[3] / H <= hi + 1 / H)
+            rows.append({"dataset": ds, "part": part, "patches": n, "outside_frame": outside,
+                         "on_object": on_object, "y2_outside_target_range": y2_out})
+    return rows
+
+
+def geometry_samples(cfg, ds):
+    """Положение и размер (y-центр / H, площадь / (W·H)): цели, маски, приманки (обучение) и контроль (test)."""
+    out = defaultdict(list)
+
+    def add(kind, b, W, H):
+        out[kind].append(((b[1] + b[3]) / 2 / H, area(b) / (W * H)))
+
+    span_pool = target_span_pool(cfg, ds)
+    tr = cfg["training"]
+    targets, _, _ = LOADERS[ds](cfg, "train")
+    by_img = defaultdict(list)
+    for img, _, box in targets:
+        by_img[img].append(box)
+    for img, bxs in sorted(by_img.items()):
+        W, H = image_size(cfg, ds, "train", img)
+        rng = rng_for(tr["seed"], "placement", ds, img)
+        masks, decoys = training_geometry(bxs, W, H, rng, "proposed", cfg, span_pool)
+        for b in bxs:
+            add("train: цели", b, W, H)
+        for m in masks:
+            add("train: маски proposed", m, W, H)
+        for d in decoys:
+            add("train: приманки", d, W, H)
+    part = "test"
+    with open(Path(cfg["splits_dir"]) / f"masks_{ds}_{part}.csv", encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            W, H = image_size(cfg, ds, part, r["image"])
+            if float(r["level"]) == 0:
+                add("test: цели", tuple(int(r[k]) for k in ("bx0", "by0", "bx1", "by1")), W, H)
+            else:
+                add("test: маски", tuple(int(r[k]) for k in ("mx0", "my0", "mx1", "my1")), W, H)
+    with open(Path(cfg["splits_dir"]) / f"control_{ds}_{part}.csv", encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            W, H = image_size(cfg, ds, part, r["image"])
+            add("test: контрольные заплатки", tuple(int(r[k]) for k in ("dx0", "dy0", "dx1", "dy1")), W, H)
+    return out
+
+
+def ks(a, b):
+    """Статистика Колмогорова–Смирнова (максимальная разность эмпирических функций распределения)."""
+    a, b = np.sort(a), np.sort(b)
+    grid = np.r_[a, b]
+    return float(np.max(np.abs(np.searchsorted(a, grid, side="right") / len(a)
+                               - np.searchsorted(b, grid, side="right") / len(b))))
+
+
+def placement_report(cfg, datasets):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    rep = Path(cfg["report_dir"])
+    lines = ["# Положение и размер заплаток: цели / маски / приманки / контроль", "",
+             f"Правило размещения приманок и контрольных заплаток: `{cfg['placement']['mode']}` "
+             f"(вертикальный диапазон случайной цели {cfg['placement']['pool_part']}, заплатка в нём — равномерно, "
+             "x — равномерно). Приманки обучения — моделирование режима proposed на целях train (без изображений). "
+             "KS — статистика Колмогорова–Смирнова по y-центру: относительно целей и относительно масок той же части "
+             "(приманки и контроль должны быть похожи на маски: те же размеры, то же положение по высоте).", "",
+             "| датасет | набор | n | y-центр: медиана | площадь: медиана, % кадра | KS к целям | KS к маскам |",
+             "|---|---|---|---|---|---|---|"]
+    for ds in datasets:
+        g = geometry_samples(cfg, ds)
+        fig, axes = plt.subplots(1, 2, figsize=(11, 3.8))
+        for kind, vals in g.items():
+            y, a = np.array([v[0] for v in vals]), np.array([v[1] for v in vals])
+            tr = kind.startswith("train")
+            k_t = ks(y, np.array([v[0] for v in g["train: цели" if tr else "test: цели"]]))
+            k_m = ks(y, np.array([v[0] for v in g["train: маски proposed" if tr else "test: маски"]]))
+            lines.append(f"| {ds} | {kind} | {len(vals)} | {np.median(y):.3f} | {100 * np.median(a):.3f} | "
+                         f"{k_t:.3f} | {k_m:.3f} |")
+            style = "-" if "цели" in kind else "--" if "train" in kind else ":"
+            axes[0].hist(y, bins=np.linspace(0, 1, 41), density=True, histtype="step", linestyle=style,
+                         linewidth=1.6, label=kind)
+            axes[1].hist(np.log10(a), bins=np.linspace(-5, -0.5, 41), density=True, histtype="step",
+                         linestyle=style, linewidth=1.6)
+        axes[0].set_xlabel("y-центр / высота кадра (0 — верх)")
+        axes[1].set_xlabel("log10(площадь / площадь кадра)")
+        axes[0].set_ylabel("плотность")
+        axes[0].legend(fontsize=7)
+        fig.suptitle(ds)
+        fig.tight_layout()
+        fig.savefig(rep / f"placement_{ds}.png", dpi=110)
+        plt.close(fig)
+        lines.append("")
+        lines.append(f"![](placement_{ds}.png)")
+        lines.append("")
+    crow = check_control(cfg, datasets)
+    lines += ["## Проверка контрольных заплаток", "",
+              "| датасет | часть | заплаток | за кадром | на размеченном объекте | вне [min y1, max y2] целей train |",
+              "|---|---|---|---|---|---|"]
+    lines += [f"| {r['dataset']} | {r['part']} | {r['patches']} | {r['outside_frame']} | {r['on_object']} | "
+              f"{r['y2_outside_target_range']} |" for r in crow]
+    (rep / "placement.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("\n".join(lines))
+    return sum(r["outside_frame"] + r["on_object"] + r["y2_outside_target_range"] for r in crow)
 
 
 def check(cfg, datasets):
@@ -484,7 +670,7 @@ def examples(cfg, ds):
         for i in range(2):
             rng = rng_for(tr["seed"], "example", regime, i)
             ex_cfg = {**cfg, "training": {**tr, regime: {**tr[regime], "p": 1.0}}}
-            im, masks_, decoys = apply_training_masks(img, tboxes, rng, regime, ex_cfg)
+            im, masks_, decoys = apply_training_masks(img, tboxes, rng, regime, ex_cfg, target_span_pool(cfg, ds))
             for m in masks_:
                 cv2.rectangle(im, m[:2], (m[2] - 1, m[3] - 1), (0, 255, 0), 2)
             for m in decoys:
@@ -510,7 +696,7 @@ def examples(cfg, ds):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("command", choices=["generate", "check", "examples"])
+    ap.add_argument("command", choices=["generate", "check", "examples", "placement"])
     ap.add_argument("--config", default="configs/masks.yaml")
     ap.add_argument("--dataset", choices=["kitti", "bdd"], action="append",
                     help="можно указать несколько раз; по умолчанию оба")
@@ -524,6 +710,8 @@ def main():
             generate(cfg, ds, args.limit)
     elif args.command == "check":
         raise SystemExit(1 if check(cfg, datasets) else 0)
+    elif args.command == "placement":
+        raise SystemExit(1 if placement_report(cfg, datasets) else 0)
     else:
         for ds in datasets:
             examples(cfg, ds)
