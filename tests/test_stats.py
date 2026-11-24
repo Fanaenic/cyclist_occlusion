@@ -15,10 +15,10 @@ ROOT = Path(__file__).resolve().parents[1]
 PCFG = yaml.safe_load((ROOT / "configs" / "protocol.yaml").read_text(encoding="utf-8"))
 
 
-def synthetic_eval(rng, n_clusters, imgs_per_cluster, p_hit, fp_rate):
+def synthetic_eval(rng, n_clusters, imgs_per_cluster, p_hit, fp_rate, targets=None):
     """Каждое изображение: 0–2 цели; цель найдена с вероятностью p_hit (score ~ U(0.3, 1)); FP ~ Poisson."""
     images = [f"c{c}_i{i}" for c in range(n_clusters) for i in range(imgs_per_cluster)]
-    nt = {img: int(rng.integers(0, 3)) for img in images}
+    nt = targets if targets is not None else {img: int(rng.integers(0, 3)) for img in images}
     ev = Evaluation(len(images), sum(nt.values()))
     for img in images:
         m = [(float(rng.uniform(0.3, 1.0)), "tp") for _ in range(nt[img]) if rng.random() < p_hit]
@@ -59,14 +59,20 @@ def make_runs(tmp_path, p_hit_t, p_hit_c, n_clusters=60, seeds=(1, 2, 3)):
     ds = "toy"
     thr = {}
     cl = None
+    targets = None
     for regime, p in (("proposed", p_hit_t), ("baseline", p_hit_c)):
         for s in seeds:
             thr[f"{ds}__{regime}__s{s}"] = 0.5
             for L in (0.0, 0.3, 0.5, 0.7, 0.9):
                 # чем выше уровень, тем ниже вероятность найти цель; proposed теряет меньше
                 ev, cl = synthetic_eval(np.random.default_rng(rng.integers(1 << 30)), n_clusters, 8,
-                                        p * (1 - 0.6 * L) if regime == "baseline" else p * (1 - 0.3 * L), 0.2)
-                ev.save(tmp_path / f"{ds}__{regime}__s{s}__L{L}__all.npz")
+                                        p * (1 - 0.6 * L) if regime == "baseline" else p * (1 - 0.3 * L), 0.2,
+                                        targets)
+                targets = ev.targets_per_image
+                ev.save(tmp_path / f"{ds}__{regime}__s{s}__L{L}__all.npz", dataset=ds, split="test",
+                        regime=regime, seed=s, level=L, subset="all", population="all_levels", fill="bg",
+                        threshold=0.5, target_boxes={img: [[i, 0, i + 1, 1] for i in range(count)]
+                                                     for img, count in targets.items()})
     (tmp_path / "thresholds.json").write_text(json.dumps(thr))
     with open(tmp_path / f"{ds}_clusters.csv", "w", newline="") as fh:
         w = csv.writer(fh)

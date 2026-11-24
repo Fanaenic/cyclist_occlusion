@@ -52,24 +52,27 @@ def kitti_records(cfg, limit):
     with open(c["selected_file"], encoding="utf-8") as fh:
         for r in csv.DictReader(fh):
             selected.add((r["image"], int(r["line"])))
-    out = {}
+    out = {"_forbidden": {}}
     for part in PARTS:
         recs = []
         for stem in read_split(cfg, "kitti", part)[: limit or None]:
             img = Path(c["image_dir"]) / f"{stem}{c['image_ext']}"
             with Image.open(img) as im:
                 W, H = im.size
-            tg, ig = [], []
+            tg, ig, fb = [], [], []
             for i, ln in enumerate((Path(c["label_dir"]) / f"{stem}.txt").read_text().splitlines()):
                 p = ln.split()
                 if not p:
                     continue
                 box = tuple(map(float, p[4:8]))
+                if p[0] in c["forbidden_categories"]:
+                    fb.append((box, p[0]))
                 if p[0] == c["target"] and (stem, i) in selected:
                     tg.append((box, ln))
                 elif p[0] in c["ignore_categories"]:
                     reason = "dontcare" if p[0] == "DontCare" else f"cyclist_filtered_occ{p[2]}_tr{float(p[1]):.2f}"
                     ig.append((box, reason, ln))
+            out["_forbidden"][str(img)] = fb + [(b, "ignore") for b, _, _ in ig]
             recs.append((img, W, H, tg, ig))
         out[part] = recs
     return out
@@ -85,7 +88,7 @@ def bdd_box(lb):
 def bdd_records(cfg, limit):
     c = cfg["bdd"]
     W, H = c["image_size"]
-    out, cache = {}, {}
+    out, cache = {"_forbidden": {}}, {}
     for part in PARTS:
         src = c["sources"][part]
         if src not in cache:
@@ -120,6 +123,9 @@ def bdd_records(cfg, limit):
                     # rider с велосипедом, отсеянный порогом высоты, — ignore по его целевой рамке
                     ig.append((matched_box.get(lid, bdd_box(lb)), f"{lb['category']}_filtered", lb))
             img = Path(c["image_dir"].format(source=src)) / name
+            out["_forbidden"][str(img)] = ([(bdd_box(lb), lb["category"]) for lb in labels
+                                            if lb["category"] in c["forbidden_categories"]]
+                                           + [(b, "ignore") for b, _, _ in ig])
             recs.append((img, W, H, tg, ig))
         if part == "train" and c.get("train_negatives") is not None and not limit:
             recs = thin_negatives(recs, c["train_negatives"], c["thin_seed"], Path(cfg["splits_dir"]) / "bdd_train_used.txt")
@@ -146,7 +152,7 @@ def write_dataset(cfg, ds, recs):
     root = Path(cfg["out_dir"]) / ds
     counts = []
     for part in PARTS:
-        for sub in ("images", "labels", "ignore"):
+        for sub in ("images", "labels", "ignore", "forbidden"):
             (root / sub / part).mkdir(parents=True, exist_ok=True)
         n_img = n_tg = n_ig = n_missing = n_pos = 0
         for img, W, H, tg, ig in recs[part]:
@@ -156,6 +162,10 @@ def write_dataset(cfg, ds, recs):
             (root / "ignore" / part / f"{stem}.txt").write_text(
                 "".join(f"{b[0]:.2f} {b[1]:.2f} {b[2]:.2f} {b[3]:.2f} {reason}\n" for b, reason, _ in ig),
                 encoding="utf-8")
+            # запрещённые области для обучающих масок: все размеченные люди/велосипеды и ignore (пиксели кадра)
+            (root / "forbidden" / part / f"{stem}.txt").write_text(
+                "".join(f"{b[0]:.2f} {b[1]:.2f} {b[2]:.2f} {b[3]:.2f} {cat}\n"
+                        for b, cat in recs["_forbidden"][str(img)]), encoding="utf-8")
             if Path(img).exists():
                 link(Path(img), root / "images" / part / Path(img).name)
             else:

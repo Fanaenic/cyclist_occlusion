@@ -1,0 +1,6 @@
+dataset,metric,level,treatment,control,value_treatment,value_control,estimate,fppi_treatment,fppi_control,ci_level,ci_low,ci_high,fppi_gap,invalid_budget_replicas,budget,estimate_budget,ci_low_budget,ci_high_budget,decision,descriptive,invalid_replicas
+bdd,recall,0.3,proposed_noise,baseline,0.0,0.0,0.0,0.03,0.10166666666666667,0.9875,0.0,0.0,0.07166666666666667,0,0.10166666666666667,0.0,0.0,0.0,not_established,True,0
+bdd,recall,0.5,proposed_noise,baseline,0.0,0.0,0.0,0.03166666666666667,0.10166666666666667,0.9875,0.0,0.0,0.07,0,0.10166666666666667,0.0,0.0,0.0,not_established,True,0
+bdd,recall,0.7,proposed_noise,baseline,0.0,0.0,0.0,0.034999999999999996,0.09999999999999999,0.9875,0.0,0.0,0.065,0,0.09999999999999999,0.0,0.0,0.0,not_established,True,0
+bdd,recall,0.9,proposed_noise,baseline,0.0,0.0,0.0,0.03833333333333334,0.10666666666666667,0.9875,0.0,0.0,0.06833333333333333,0,0.10666666666666667,0.0,0.0,0.0,not_established,True,0
+bdd,ap,0.0,proposed_noise,baseline,0.0043777143113150375,0.0018115003837168141,0.002566213927598224,0.03333333333333333,0.10000000000000002,0.95,-0.0011402394437108358,inf,,,,,,,non_inferior,True,0

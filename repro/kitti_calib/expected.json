@@ -1,0 +1,21 @@
+[
+  {
+    "dataset": "kitti",
+    "role": "secondary (descriptive)",
+    "map_ok": true,
+    "map_binding": false,
+    "established_levels": [],
+    "practically_significant_levels": [],
+    "unmeasurable_levels": [
+      0.3,
+      0.5,
+      0.7,
+      0.9
+    ],
+    "usefulness_level": null,
+    "hypothesis_confirmed": null,
+    "control_hit_gap": 0.0,
+    "shortcut_flag": false,
+    "status": "descriptive"
+  }
+]

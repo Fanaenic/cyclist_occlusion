@@ -1,0 +1,6 @@
+dataset,metric,level,treatment,control,value_treatment,value_control,estimate,fppi_treatment,fppi_control,ci_level,ci_low,ci_high,fppi_gap,decision,descriptive,invalid_replicas
+kitti,recall,0.3,proposed_noise,baseline,0.0,0.0,0.0,0.06666666666666667,0.10000000000000002,0.9875,0.0,0.0,0.033333333333333354,not_established,True,1
+kitti,recall,0.5,proposed_noise,baseline,0.0,0.0,0.0,0.07333333333333333,0.09500000000000001,0.9875,0.0,0.0,0.02166666666666668,not_established,True,0
+kitti,recall,0.7,proposed_noise,baseline,0.0,0.0,0.0,0.06666666666666667,0.10166666666666667,0.9875,0.0,0.0,0.035,not_established,True,1
+kitti,recall,0.9,proposed_noise,baseline,0.0,0.0,0.0,0.06666666666666667,0.09666666666666668,0.9875,0.0,0.0,0.030000000000000013,not_established,True,0
+kitti,ap,0.0,proposed_noise,baseline,0.000504680851777755,0.0012684661552819936,-0.0007637853035042386,0.06666666666666667,0.10000000000000002,0.95,-0.002457167671698418,inf,,non_inferior,True,0

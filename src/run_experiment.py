@@ -1,17 +1,23 @@
-"""Весь конвейер: обучение -> порог на calib -> оценка test на всех уровнях масок -> бутстрэп.
+"""Весь конвейер: обучение -> порог на calib -> оценка на всех уровнях масок -> бутстрэп.
 
-Для каждого датасета, режима (baseline / proposed / ORE) и seed:
-  1. обучение YOLOv8n (src/occlusion_train.py — маски proposed / ORE при обучении);
+Для каждого датасета, режима (configs/train.yaml, regimes) и seed:
+  1. обучение YOLOv8n (src/occlusion_train.py — маски режима при обучении; пропуски — в skip_log);
   2. детекции на calib без масок -> порог для FPPI = target_fppi (заморожен);
-  3. детекции на test для каждого уровня маски (маски из splits/masks_*_test.csv, одни и те же для всех моделей)
-     -> src/evaluate.py: метрики и .npz по изображениям;
+  3. детекции на оцениваемой части для каждого уровня маски (маски из splits/masks_*_<часть>.csv, одни и те же
+     для всех моделей) -> src/evaluate.py: метрики и .npz по изображениям;
   4. src/stats.py по всем .npz.
 
-Выход: {out_dir}/{tag}/ — веса, детекции, eval/*.npz, eval/thresholds.json, metrics.csv;
-       reports/stats_{tag}.*, reports/{tag}.md
+Оцениваемая часть: основная серия — test; технический прогон (--smoke) — ТОЛЬКО calib (замечание 5):
+изображения test в технический прогон не входят. В техническом прогоне порог и оценка — на одной и той же calib,
+это проверка конвейера, а не результат.
+
+Каждый запуск сохраняет снимок {out_dir}/{tag}/snapshots/<время>/: все configs/*.yaml, git hash и список
+изменённых файлов, версии пакетов, командную строку и списки использованных изображений (замечание 2).
+
+Выход: {out_dir}/{tag}/ — веса, детекции, eval/*.npz, eval/thresholds.json, metrics.csv; reports/stats_{tag}.*
 
 Запуск:
-  python src/run_experiment.py --smoke                     технический прогон (limit и epochs из smoke)
+  python src/run_experiment.py --smoke                     технический прогон (limit и epochs из smoke), только calib
   python src/run_experiment.py --tag main                  полная серия — только по явной команде
 """
 import argparse
@@ -23,7 +29,6 @@ import time
 from pathlib import Path
 
 import cv2
-import numpy as np
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -48,15 +53,15 @@ def subset_images(root, part, limit):
     return (pos + neg)[:limit] if limit else pos + neg
 
 
-def build_subset(ycfg, ds, limit, out):
-    """Набор для Ultralytics: при limit — подмножество (жёсткие ссылки), иначе — datasets_yolo как есть."""
+def build_subset(ycfg, ds, limit, out, parts):
+    """Набор для Ultralytics: при limit — подмножество частей parts (жёсткие ссылки), иначе — datasets_yolo как есть."""
     root = Path(ycfg["out_dir"]) / ds
-    images = {p: subset_images(root, p, limit) for p in PARTS}
+    images = {p: subset_images(root, p, limit) for p in parts}
     if not limit:
         return Path(ycfg["out_dir"]) / f"{ds}.yaml", images, root
     sub = out / "data" / ds
-    for p in PARTS:
-        for d in ("images", "labels"):
+    for p in parts:
+        for d in ("images", "labels", "forbidden"):
             (sub / d / p).mkdir(parents=True, exist_ok=True)
         files = {f.stem: f for f in (root / "images" / p).iterdir()}
         for stem in images[p]:
@@ -64,11 +69,45 @@ def build_subset(ycfg, ds, limit, out):
             dst = sub / "images" / p / src.name
             if not dst.exists():
                 os.link(src, dst)
-            (sub / "labels" / p / f"{stem}.txt").write_bytes((root / "labels" / p / f"{stem}.txt").read_bytes())
+            for d in ("labels", "forbidden"):
+                (sub / d / p / f"{stem}.txt").write_bytes((root / d / p / f"{stem}.txt").read_bytes())
     data_yaml = out / "data" / f"{ds}.yaml"
     data_yaml.write_text(yaml.safe_dump({"path": str(sub.resolve()), "train": "images/train", "val": "images/calib",
-                                         "test": "images/test", "names": {0: ycfg["class_name"]}}), encoding="utf-8")
+                                         "names": {0: ycfg["class_name"]}}), encoding="utf-8")
     return data_yaml, images, root
+
+
+def save_snapshot(out, images_by_ds):
+    """Снимок запуска: конфиги, git hash и изменённые файлы, версии, командная строка, списки изображений."""
+    import platform
+    import shutil
+    import subprocess
+
+    snap = out / "snapshots" / time.strftime("%Y%m%d-%H%M%S")
+    (snap / "configs").mkdir(parents=True, exist_ok=True)
+    for f in sorted(Path("configs").glob("*.yaml")):
+        shutil.copy2(f, snap / "configs" / f.name)
+
+    def git(*a):
+        try:
+            return subprocess.run(["git", *a], capture_output=True, text=True, check=True).stdout.strip()
+        except (OSError, subprocess.CalledProcessError) as e:
+            return f"недоступно: {e}"
+
+    (snap / "git.txt").write_text(f"commit: {git('rev-parse', 'HEAD')}\nизменённые файлы (git status --porcelain):\n"
+                                  f"{git('status', '--porcelain') or '(нет)'}\n", encoding="utf-8")
+    versions = {"python": platform.python_version()}
+    for mod in ("torch", "ultralytics", "numpy", "cv2"):
+        try:
+            versions[mod] = __import__(mod).__version__
+        except ImportError:
+            versions[mod] = "нет"
+    (snap / "run.json").write_text(json.dumps({"argv": sys.argv, "versions": versions}, ensure_ascii=False, indent=1),
+                                   encoding="utf-8")
+    for ds, parts in images_by_ds.items():
+        for part, names in parts.items():
+            (snap / f"images_{ds}_{part}.txt").write_text("\n".join(names) + "\n", encoding="utf-8")
+    return snap
 
 
 # ---------------------------------------------------------------- обучение
@@ -83,14 +122,25 @@ def train(tcfg, mcfg, data_yaml, ds, regime, seed, epochs, out):
     if done.exists():
         return weights
     from masks import target_span_pool
+    skip_log = out / "train" / name / "skip_log"
+    if skip_log.exists():                                       # незавершённое обучение начинается заново
+        for f in skip_log.glob("*.txt"):
+            f.unlink()
+    skip_log.mkdir(parents=True, exist_ok=True)
     OcclusionTrainer.occ = {"regime": regime, "cfg": mcfg, "seed": mcfg["training"]["seed"] * 1000 + seed,
-                            "span_pool": target_span_pool(mcfg, ds)}
+                            "span_pool": target_span_pool(mcfg, ds), "skip_log": str(skip_log.resolve())}
     model = YOLO(tcfg["model"])
     model.train(trainer=OcclusionTrainer, data=str(data_yaml), epochs=epochs, imgsz=tcfg["imgsz"],
                 batch=tcfg["batch"], seed=seed, deterministic=tcfg["deterministic"], workers=tcfg["workers"],
                 amp=tcfg["amp"], plots=tcfg["plots"], val=tcfg["val"], project=str((out / "train").resolve()),
                 name=name, exist_ok=True, verbose=False)
-    done.write_text(json.dumps({"epochs": epochs, "seed": seed, "regime": regime}), encoding="utf-8")
+    skips = {}
+    for f in skip_log.glob("*.txt"):
+        for ln in f.read_text(encoding="utf-8").splitlines():
+            _, _, kind, reason = ln.split("\t")
+            skips[f"{kind}:{reason}"] = skips.get(f"{kind}:{reason}", 0) + 1
+    done.write_text(json.dumps({"epochs": epochs, "seed": seed, "regime": regime, "skipped": skips},
+                               ensure_ascii=False), encoding="utf-8")
     return weights
 
 
@@ -120,12 +170,12 @@ def detect(weights, image_paths, masks_by_image, tcfg, pcfg, fill):
     return out
 
 
-def read_masks(splits_dir, ds, level):
+def read_masks(splits_dir, ds, level, part):
     """{stem: [((x0,y0,x1,y1), mask_seed, (sx, sy))]} для уровня (уровень 0 — пусто)."""
     res = {}
     if level == 0:
         return res
-    with open(Path(splits_dir) / f"masks_{ds}_test.csv", encoding="utf-8") as fh:
+    with open(Path(splits_dir) / f"masks_{ds}_{part}.csv", encoding="utf-8") as fh:
         for r in csv.DictReader(fh):
             if float(r["level"]) == level:
                 res.setdefault(Path(r["image"]).stem, []).append(
@@ -134,10 +184,10 @@ def read_masks(splits_dir, ds, level):
     return res
 
 
-def read_control(splits_dir, ds):
+def read_control(splits_dir, ds, part):
     """Контрольные заплатки на фоне: {stem: [((x0,y0,x1,y1), mask_seed, (sx, sy))]}."""
     res = {}
-    with open(Path(splits_dir) / f"control_{ds}_test.csv", encoding="utf-8") as fh:
+    with open(Path(splits_dir) / f"control_{ds}_{part}.csv", encoding="utf-8") as fh:
         for r in csv.DictReader(fh):
             res.setdefault(Path(r["image"]).stem, []).append(
                 (tuple(int(r[k]) for k in ("dx0", "dy0", "dx1", "dy1")), int(r["mask_seed"]), (r["sx"], r["sy"])))
@@ -165,6 +215,7 @@ def evaluate_part(dets, ds, part, images, level, subset, pcfg, ycfg, population=
     """Оценка детекций части на уровне маски; population — совокупность целей (по умолчанию из протокола)."""
     gt = ground_truth(ds, part, level, images, pcfg, ycfg, subset, population, loaded)
     ev, _ = evaluate(dets, gt, images, pcfg)
+    ev.target_boxes = {img: [list(map(float, box)) for box in sorted(gt[img][0])] for img in images}
     return ev
 
 
@@ -204,11 +255,17 @@ def main():
     thr_path = ev_dir / "thresholds.json"
     thresholds = json.loads(thr_path.read_text()) if thr_path.exists() else {}
     metrics_rows, control_rows, timing = [], [], {}
+    # технический прогон оценивает только calib; test в нём не участвует (замечание 5)
+    part = "calib" if args.smoke else "test"
+    parts = ["train", "calib"] if args.smoke else PARTS
+    subsets = {ds: build_subset(ycfg, ds, limit, out, parts) for ds in datasets}
+    snap = save_snapshot(out, {ds: s[1] for ds, s in subsets.items()})
+    print(f"Снимок конфигураций и списков изображений: {snap}; оцениваемая часть: {part}")
 
     for ds in datasets:
-        data_yaml, images, root = build_subset(ycfg, ds, limit, out)
-        img_files = {p: {f.stem: f for f in (root / "images" / p).iterdir()} for p in ("calib", "test")}
-        print(f"[{ds}] train/calib/test = {[len(images[p]) for p in PARTS]} изображений")
+        data_yaml, images, root = subsets[ds]
+        img_files = {p: {f.stem: f for f in (root / "images" / p).iterdir()} for p in ("calib", part)}
+        print(f"[{ds}] " + ", ".join(f"{p} = {len(images[p])}" for p in parts) + " изображений")
         for regime in regimes:
             for seed in tcfg["seeds"]:
                 key = f"{ds}__{regime}__s{seed}"
@@ -222,16 +279,17 @@ def main():
                                    images["calib"], 0.0, "all", pcfg, ycfg, population="per_level")
                 thresholds[key] = ev.threshold_for_fppi(pcfg["metrics"]["target_fppi"])
                 thr_path.write_text(json.dumps(thresholds, indent=1))
-                test_paths = [img_files["test"][s] for s in images["test"]]
-                test_gt = load_gt(ds, "test", ycfg)
+                test_paths = [img_files[part][s] for s in images[part]]
+                test_gt = load_gt(ds, part, ycfg)
                 dets0 = None
-                # основные маски (заливка fill) + те же прямоугольники с шумовой заливкой (абляция proposed_noise)
+                # основные маски (заливка fill) + те же прямоугольники с шумовой заливкой (абляция и схема 2×2)
                 for level, fill_name in [(L, "bg") for L in levels] + [(L, "noise") for L in levels]:
                     fill = mcfg["fill"] if fill_name == "bg" else mcfg["test_noise_fill"]
                     if level == 0 and fill_name == "noise":
                         dets = dets0                         # без масок заливка не важна
                     else:
-                        dets = detect(w, test_paths, read_masks(mcfg["splits_dir"], ds, level), tcfg, pcfg, fill)
+                        dets = detect(w, test_paths, read_masks(mcfg["splits_dir"], ds, level, part), tcfg, pcfg,
+                                      fill)
                     if level == 0:
                         dets0 = dets
                     for subset, population, name in VARIANTS:
@@ -241,10 +299,11 @@ def main():
                             if name != "all":
                                 continue
                             name = "all-noise"
-                        ev = evaluate_part(dets, ds, "test", images["test"], level, subset, pcfg, ycfg,
+                        ev = evaluate_part(dets, ds, part, images[part], level, subset, pcfg, ycfg,
                                            population, test_gt)
-                        ev.save(ev_dir / f"{key}__L{level}__{name}.npz", dataset=ds, regime=regime, seed=seed,
-                                level=level, subset=subset, population=population, threshold=thresholds[key])
+                        ev.save(ev_dir / f"{key}__L{level}__{name}.npz", dataset=ds, split=part, regime=regime,
+                                seed=seed, level=level, subset=subset, population=population,
+                                fill=fill_name, threshold=thresholds[key], target_boxes=ev.target_boxes)
                         at = ev.at_threshold(thresholds[key])
                         metrics_rows.append({"dataset": ds, "regime": regime, "seed": seed, "level": level,
                                              "subset": name, "threshold": thresholds[key], "targets": ev.n_targets,
@@ -253,13 +312,13 @@ def main():
                         print(f"  {key} L={level:.0%} {name:14s} R={at['recall']:.3f} FPPI={at['fppi']:.3f} "
                               f"AP={ev.ap():.3f} thr={thresholds[key]:.3f}")
                 # контроль: заплатки только на фоне, цели открыты; заливка — фоном (основной) и шумом (абляция)
-                ctrl = {s: v for s, v in read_control(mcfg["splits_dir"], ds).items() if s in set(images["test"])}
-                cpaths = [img_files["test"][s] for s in sorted(ctrl)]
+                ctrl = {s: v for s, v in read_control(mcfg["splits_dir"], ds, part).items() if s in set(images[part])}
+                cpaths = [img_files[part][s] for s in sorted(ctrl)]
                 for fill_name, fill in (("bg", mcfg["fill"]), ("noise", mcfg["test_noise_fill"])):
                     cdets = detect(w, cpaths, ctrl, tcfg, pcfg, fill)
                     cres = control_check(cdets, ctrl, thresholds[key], pcfg)
-                    ev0 = evaluate_part(cdets, ds, "test", sorted(ctrl), 0.0, "all", pcfg, ycfg, loaded=test_gt)
-                    cres.update(dataset=ds, regime=regime, seed=seed, fill=fill_name,
+                    ev0 = evaluate_part(cdets, ds, part, sorted(ctrl), 0.0, "all", pcfg, ycfg, loaded=test_gt)
+                    cres.update(dataset=ds, split=part, regime=regime, seed=seed, fill=fill_name,
                                 fppi=ev0.at_threshold(thresholds[key])["fppi"],
                                 recall=ev0.at_threshold(thresholds[key])["recall"])
                     control_rows.append(cres)
@@ -273,8 +332,9 @@ def main():
         wr.writerows(metrics_rows)
     (out / f"timing_{rtag}.json").write_text(json.dumps(timing, indent=1), encoding="utf-8")
 
-    from stats import analyse
-    override = {"datasets": datasets}
+    from stats import analyse, factorial_report
+    from finalize import finalize, write_final
+    override = {"datasets": datasets, "split": part}
     if args.replicas:
         override["bootstrap"] = {**pcfg["stats"]["bootstrap"], "replicas": args.replicas}
     t0 = time.time()
@@ -291,51 +351,17 @@ def main():
         analyse(ev_dir, pcfg, override, tag=f"{rtag}_noise_ablation_bg", treatment="proposed_noise")
         analyse(ev_dir, pcfg, {**override, "subset": "all-noise"}, tag=f"{rtag}_noise_ablation_noise",
                 treatment="proposed_noise")
+    if set(pcfg["factorial"]["regimes"].values()) <= set(regimes):
+        factorial_report(ev_dir, out, pcfg, {**pcfg["stats"], **override}, datasets, part, control_rows)
     timing["stats"] = time.time() - t0
     (out / f"timing_{rtag}.json").write_text(json.dumps(timing, indent=1), encoding="utf-8")
-    decision = apply_control_rule(control_rows, decision, pcfg, rtag, out)
-    print(json.dumps(decision, ensure_ascii=False))
-
-
-def apply_control_rule(rows, decision, pcfg, rtag, out):
-    """Правило протокола (control): если доля контрольных заплаток с детекцией у treatment выше, чем у control,
-    больше чем на max_hit_gap, вывод о полезности не делается (возможное обучение на заплатку)."""
-    c = pcfg["control"]
-    s = pcfg["stats"]
-    with open(out / f"control_{rtag}.csv", "w", newline="", encoding="utf-8") as fh:
-        wr = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+    with (out / f"control_{rtag}.csv").open("w", newline="", encoding="utf-8") as fh:
+        wr = csv.DictWriter(fh, fieldnames=list(control_rows[0]))
         wr.writeheader()
-        wr.writerows(rows)
-    lines = [f"# Контроль: заплатки только на фоне ({rtag})", "",
-             f"Для каждой цели test — заплатка размера её маски уровня, поставленная вне всех рамок. Доля заплаток, "
-             f"на которых есть детекция при замороженном пороге. Заливка: bg — фоном (основной контроль, по нему "
-             f"правило: treatment − control > {c['max_hit_gap']} -> полезность не устанавливается), noise — шумом "
-             "(для абляции proposed_noise, в правило не входит).", "",
-             "| датасет | режим | seed | заливка | заплаток | с детекцией | доля | FPPI | Recall (цели открыты) |",
-             "|---|---|---|---|---|---|---|---|---|"]
-    lines += [f"| {r['dataset']} | {r['regime']} | {r['seed']} | {r['fill']} | {r['patches']} | {r['patches_hit']} | "
-              f"{r['hit_rate']:.3f} | {r['fppi']:.3f} | {r['recall']:.3f} |" for r in rows]
-    means = {}
-    for r in rows:
-        means.setdefault((r["dataset"], r["regime"], r["fill"]), []).append(r["hit_rate"])
-    lines += ["", "Средняя по seed доля заплаток с детекцией:", "", "| датасет | режим | bg | noise |", "|---|---|---|---|"]
-    for ds_, reg in sorted({(k[0], k[1]) for k in means}):
-        lines.append(f"| {ds_} | {reg} | {np.mean(means.get((ds_, reg, 'bg'), [np.nan])):.3f} | "
-                     f"{np.mean(means.get((ds_, reg, 'noise'), [np.nan])):.3f} |")
-    lines += ["", "## Решение", ""]
-    for ds, d in decision.items():
-        mean = lambda reg: np.mean([r["hit_rate"] for r in rows
-                                    if r["dataset"] == ds and r["regime"] == reg and r["fill"] == "bg"] or [0])
-        gap = mean(s["treatment"]) - mean(s["control"])
-        d["control_hit_gap"] = float(gap)
-        d["shortcut_flag"] = bool(gap > c["max_hit_gap"])
-        if d["shortcut_flag"] and d["hypothesis_confirmed"] is not None:
-            d["hypothesis_confirmed"] = False
-        lines.append(f"- **{ds}**: разность долей {s['treatment']} − {s['control']} = {gap:+.3f}; "
-                     + ("**возможное обучение на заплатку — вывод о полезности не делается**."
-                        if d["shortcut_flag"] else "в пределах допуска."))
-    Path("reports").joinpath(f"control_{rtag}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return decision
+        wr.writerows(control_rows)
+    results = finalize(decision, control_rows, pcfg, pcfg["stats"], part)
+    write_final(results, out)
+    print(json.dumps(results, ensure_ascii=False))
 
 
 if __name__ == "__main__":

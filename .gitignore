@@ -52,3 +52,4 @@ desktop.ini
 # Временные файлы Office
 ~$*
 *.tmp
+/main_b16_*.log

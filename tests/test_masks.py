@@ -103,8 +103,10 @@ def test_pick_like_targets_patch_taller_than_span_is_bottom_aligned():
 BG_CFG = {
     "shape": SHAPE, "neighbors": NB, "fill": {"mode": "background"}, "background": {"max_tries": 200},
     "placement": {"mode": "like_targets"},
+    "training_forbidden": {"part_of_target_ioa": 0.9},
     "training": {"proposed": {"p": 1.0, "levels": [0.5], "weights": [1], "decoys": True},
-                 "ore": {"p": 1.0, "area": [0.1, 0.3], "aspect_ratio": [0.5, 2.0], "max_tries": 100, "decoys": True}},
+                 "ore": {"generator": "ore", "p": 1.0, "area": [0.1, 0.3],
+                         "aspect_ratio": [0.5, 2.0], "max_tries": 100, "decoys": True}},
 }
 
 
@@ -128,7 +130,8 @@ def test_training_decoys_match_masks_and_stay_on_background(regime):
     img = np.random.default_rng(1).integers(0, 255, (300, 600, 3), dtype=np.uint8)
     boxes = [(100, 100, 140, 180), (300, 120, 330, 170)]
     spans = [[100 / 300, 180 / 300], [120 / 300, 170 / 300]]                # диапазоны целей, доли высоты
-    out, masks, decoys = apply_training_masks(img, boxes, np.random.default_rng(2), regime, BG_CFG, spans)
+    out, masks, decoys, skips = apply_training_masks(img, boxes, np.random.default_rng(2), regime, BG_CFG, spans)
+    assert not skips
     assert len(masks) == len(decoys) == 2
     for m, d in zip(masks, decoys):
         assert (m[2] - m[0], m[3] - m[1]) == (d[2] - d[0], d[3] - d[1])     # приманка того же размера

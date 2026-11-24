@@ -2,8 +2,9 @@
 
 Библиотечная часть (используется при обучении и оценке):
   pixel_box, make_mask, apply_mask         — маска на заданную долю площади рамки
-  sample_training_mask, random_erasing_ore — режимы обучения proposed и ORE
-  apply_training_masks, place_patch        — маски обучения и приманки в типичном для целей положении
+  sample_training_mask, random_erasing_ore — маска уровня обучения и ORE
+  plan_training_masks, apply_training_masks — маски обучения и приманки: вне всех размеченных объектов,
+                                             при отсутствии чистого места воздействие пропускается
 
 Командная часть:
   generate  — один раз построить маски и контрольные заплатки для calib/test -> splits/{masks,control}_{ds}_{part}.csv
@@ -212,46 +213,90 @@ def random_erasing_ore(box, rng, ore):
     return None
 
 
-def training_geometry(boxes, W, H, rng, regime, cfg, span_pool=None):
-    """Маски режима обучения на целях и приманки (без изображения). Возвращает (маски, приманки)."""
+def part_of(box, target, min_ioa):
+    """Рамка box — часть цели target (например, собственные rider и bike у объединённой рамки BDD100K)."""
+    return area(box) > 0 and inter(box, target) / area(box) >= min_ioa
+
+
+def plan_training_masks(boxes, forbidden, W, H, rng, regime, cfg, span_pool=None):
+    """План воздействий режима обучения на кадре без изображения (по нему и накладывают, и считают сухой прогон).
+
+    boxes — пиксельные рамки отобранных целей; forbidden — пиксельные рамки ВСЕХ размеченных людей, rider, bike,
+    cyclist и ignore-областей кадра (training_forbidden в configs/masks.yaml). Чистое место для приманки и для
+    источника фоновой заливки ищется вне boxes и forbidden. Если его нет — воздействие НЕ применяется,
+    причина возвращается в skips.
+
+    Возвращает (операции, skips): операция — {"kind": "mask" | "decoy", "rect", "src" (для фона) | None, "seed"};
+    skip — {"kind", "reason"}.
+    """
     rcfg = cfg["training"][regime]
-    masks, decoys = [], []
+    fill = rcfg.get("fill", cfg["fill"])
+    tries = cfg["background"]["max_tries"]
+    min_ioa = cfg["training_forbidden"]["part_of_target_ioa"]
+    occupied = list(boxes) + list(forbidden)
+    ops, skips = [], []
+
+    def add(kind, rect, extra_avoid):
+        """Добавить операцию; для фоновой заливки — найти чистый источник, иначе пропуск."""
+        src = None
+        if fill["mode"] == "background":
+            w, h = rect[2] - rect[0], rect[3] - rect[1]
+            sx, sy, clean = pick_background(W, H, w, h, occupied + [rect] + extra_avoid, rng, tries)
+            if not clean:
+                skips.append({"kind": kind, "reason": "no_clean_source"})
+                return False
+            src = (sx, sy)
+        ops.append({"kind": kind, "rect": rect, "src": src, "seed": int(rng.integers(0, 2**31 - 1))})
+        return True
+
+    applied = []
     for i, b in enumerate(boxes):
-        if regime == "ore":
+        if rcfg.get("generator", "levels") == "ore":
             m = random_erasing_ore(b, rng, rcfg)
         else:
-            nbs = [x for j, x in enumerate(boxes) if j != i]
-            m = sample_training_mask(b, rng, rcfg, cfg["shape"], nbs, cfg["neighbors"])
-        if m:
-            masks.append(m)
+            # соседи — другие цели и размеченные объекты, кроме частей самой цели
+            nbs = [x for j, x in enumerate(boxes) if j != i] + [f for f in forbidden if not part_of(f, b, min_ioa)]
+            if rcfg.get("p", 0) <= 0 or rng.random() >= rcfg["p"]:
+                continue
+            w_ = np.asarray(rcfg["weights"], dtype=float)
+            frac = float(rng.choice(rcfg["levels"], p=w_ / w_.sum()))
+            m, _, flag = make_mask(b, frac, rng, cfg["shape"], nbs, cfg["neighbors"])
+            if flag:
+                skips.append({"kind": "mask", "reason": "neighbor_cover"})
+                continue
+        if m and add("mask", m, []):
+            applied.append(m)
     if rcfg.get("decoys", True):
-        for m in masks:
+        decoys = []
+        for m in applied:
             w, h = m[2] - m[0], m[3] - m[1]
-            dx, dy, _ = place_patch(W, H, w, h, list(boxes) + decoys, rng, cfg, span_pool)
-            decoys.append((dx, dy, dx + w, dy + h))
-    return masks, decoys
+            dx, dy, clean = place_patch(W, H, w, h, occupied + decoys, rng, cfg, span_pool)
+            if not clean:
+                skips.append({"kind": "decoy", "reason": "no_clean_place"})
+                continue
+            d = (dx, dy, dx + w, dy + h)
+            if add("decoy", d, decoys):
+                decoys.append(d)
+    return ops, skips
 
 
-def apply_training_masks(img, boxes, rng, regime, cfg, span_pool=None):
-    """Маски режима обучения на всех целях кадра + столько же заплаток-приманок на фоне.
+def apply_training_masks(img, boxes, rng, regime, cfg, span_pool=None, forbidden=()):
+    """Маски режима обучения на целях кадра и приманки на фоне (план — plan_training_masks).
 
-    boxes — пиксельные рамки целей; regime — "proposed", "ore" или "proposed_noise"; cfg — весь configs/masks.yaml;
-    span_pool — диапазоны [y1, y2] целей train (доли высоты кадра) для размещения приманок (placement.mode: like_targets).
-    Приманка — участок того же размера, что маска, вне рамок целей, в типичном для целей положении,
-    закрытый так же (фоном из другого места). Так присутствие заплатки не указывает на класс объекта.
-    Заливка — training.<режим>.fill, если задана (proposed_noise: шум), иначе общая fill.
-    Возвращает (изображение, список масок, список приманок).
+    boxes — пиксельные рамки целей; forbidden — рамки всех размеченных людей/велосипедов и ignore-областей кадра;
+    regime — режим из training в configs/masks.yaml; span_pool — диапазоны [y1, y2] целей train (доли высоты кадра)
+    для размещения приманок. Заливка — training.<режим>.fill, если задана, иначе общая fill; приманки заливаются так же.
+    Возвращает (изображение, маски, приманки, пропуски).
     """
     H, W = img.shape[:2]
-    tries = cfg["background"]["max_tries"]
     fill = cfg["training"][regime].get("fill", cfg["fill"])
+    ops, skips = plan_training_masks(boxes, forbidden, W, H, rng, regime, cfg, span_pool)
     out = img.copy()
-    masks, decoys = training_geometry(boxes, W, H, rng, regime, cfg, span_pool)
-    for m in masks + decoys:
-        w, h = m[2] - m[0], m[3] - m[1]
-        src = pick_background(W, H, w, h, list(boxes) + [m], rng, tries)[:2]
-        out = apply_mask(out, m, fill, int(rng.integers(0, 2**31 - 1)), src, img)
-    return out, masks, decoys
+    for op in ops:
+        out = apply_mask(out, op["rect"], fill, op["seed"], op["src"], img)
+    masks = [op["rect"] for op in ops if op["kind"] == "mask"]
+    decoys = [op["rect"] for op in ops if op["kind"] == "decoy"]
+    return out, masks, decoys, skips
 
 
 # ---------------------------------------------------------------- загрузка объектов
@@ -424,14 +469,16 @@ def geometry_samples(cfg, ds):
 
     span_pool = target_span_pool(cfg, ds)
     tr = cfg["training"]
-    targets, _, _ = LOADERS[ds](cfg, "train")
+    targets, nb_boxes, _ = LOADERS[ds](cfg, "train")
     by_img = defaultdict(list)
     for img, _, box in targets:
         by_img[img].append(box)
     for img, bxs in sorted(by_img.items()):
         W, H = image_size(cfg, ds, "train", img)
         rng = rng_for(tr["seed"], "placement", ds, img)
-        masks, decoys = training_geometry(bxs, W, H, rng, "proposed", cfg, span_pool)
+        ops, _ = plan_training_masks(bxs, [b for _, b in nb_boxes[img]], W, H, rng, "proposed", cfg, span_pool)
+        masks = [op["rect"] for op in ops if op["kind"] == "mask"]
+        decoys = [op["rect"] for op in ops if op["kind"] == "decoy"]
         for b in bxs:
             add("train: цели", b, W, H)
         for m in masks:
@@ -670,7 +717,8 @@ def examples(cfg, ds):
         for i in range(2):
             rng = rng_for(tr["seed"], "example", regime, i)
             ex_cfg = {**cfg, "training": {**tr, regime: {**tr[regime], "p": 1.0}}}
-            im, masks_, decoys = apply_training_masks(img, tboxes, rng, regime, ex_cfg, target_span_pool(cfg, ds))
+            im, masks_, decoys, _ = apply_training_masks(img, tboxes, rng, regime, ex_cfg, target_span_pool(cfg, ds),
+                                                         [nb for _, nb in boxes[k[0]]])
             for m in masks_:
                 cv2.rectangle(im, m[:2], (m[2] - 1, m[3] - 1), (0, 255, 0), 2)
             for m in decoys:

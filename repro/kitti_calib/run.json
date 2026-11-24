@@ -1,0 +1,19 @@
+{
+ "argv": [
+  "src/run_experiment.py",
+  "--smoke",
+  "--dataset",
+  "kitti",
+  "--tag",
+  "smoke_calib_kittti_2x2",
+  "--replicas",
+  "500"
+ ],
+ "versions": {
+  "python": "3.12.10",
+  "torch": "2.14.1+cu126",
+  "ultralytics": "8.4.215",
+  "numpy": "2.5.4",
+  "cv2": "5.0.0"
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "kitti__baseline__s1": 0.9998903274536133,
+ "kitti__baseline__s2": 0.9996998310089111,
+ "kitti__baseline__s3": 0.8453114628791809,
+ "kitti__proposed__s1": Infinity,
+ "kitti__proposed__s2": 0.9999785423278809,
+ "kitti__proposed__s3": 0.9296948909759521,
+ "kitti__bg_nodecoy__s1": Infinity,
+ "kitti__bg_nodecoy__s2": 0.9997349381446838,
+ "kitti__bg_nodecoy__s3": 0.9332665205001831,
+ "kitti__noise_decoy__s1": Infinity,
+ "kitti__noise_decoy__s2": 0.9985764026641846,
+ "kitti__noise_decoy__s3": 0.595203161239624,
+ "kitti__proposed_noise__s1": Infinity,
+ "kitti__proposed_noise__s2": 0.9995614886283875,
+ "kitti__proposed_noise__s3": 0.8678900599479675,
+ "kitti__ore__s1": Infinity,
+ "kitti__ore__s2": 0.9466184377670288,
+ "kitti__ore__s3": 0.8290286660194397
+}

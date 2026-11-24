@@ -22,7 +22,8 @@ plots: false
 val: false
 offline: true          # YOLO_OFFLINE=1: Ultralytics ничего не скачивает
 
-regimes: [baseline, proposed, ore, proposed_noise]   # proposed_noise — абляция утечки признака
+# baseline, ORE и схема 2×2 по заливке и приманкам (configs/masks.yaml, training): 6 режимов × 3 seed × 2 датасета.
+regimes: [baseline, proposed, bg_nodecoy, noise_decoy, proposed_noise, ore]
 seeds: [1, 2, 3]
 datasets: [kitti, bdd]
 
@@ -33,6 +34,8 @@ inference:
 out_dir: runs
 
 # Технический прогон (замечание 8): малое подмножество, несколько эпох. Числа — не результат исследования.
+# Оценка в техническом прогоне — ТОЛЬКО на calib (замечание 5, fix_plan2): test в проверочных прогонах
+# не используется, его изображения в подмножество технического прогона не входят.
 smoke:
-  limit: 200           # изображений в каждой части (сначала с целями, затем без, по алфавиту)
+  limit: 200           # изображений в train и calib (сначала с целями, затем без, по алфавиту)
   epochs: 3

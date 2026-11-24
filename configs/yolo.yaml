@@ -4,6 +4,9 @@
 #   {out_dir}/{dataset}/images/{part}/<файл>   жёсткая ссылка на исходное изображение (без копирования)
 #   {out_dir}/{dataset}/labels/{part}/<имя>.txt  "0 cx cy w h", координаты нормированы на размер кадра
 #   {out_dir}/{dataset}/ignore/{part}/<имя>.txt  "x1 y1 x2 y2 причина", пиксели — области, исключённые из оценки
+#   {out_dir}/{dataset}/forbidden/{part}/<имя>.txt  "x1 y1 x2 y2 категория", пиксели — все размеченные объекты
+#                                                категорий forbidden_categories и все ignore-области кадра:
+#                                                обучающие приманки и источники фоновой заливки ставятся вне них
 #   {out_dir}/{dataset}.yaml                     конфиг набора данных для Ultralytics (train / val=calib / test)
 
 out_dir: datasets_yolo
@@ -22,6 +25,8 @@ kitti:
   # Cyclist, не прошедший фильтры (occlusion, truncation, высота), и DontCare — ignore.
   # Pedestrian, Person_sitting и прочие классы остаются фоном: срабатывание на них — ложное.
   ignore_categories: [Cyclist, DontCare]
+  # Запрещённые области для обучающих масок (замечание 7): все люди и велосипедисты + ignore (DontCare, отсеянные Cyclist).
+  forbidden_categories: [Cyclist, Pedestrian, Person_sitting, DontCare]
 
 bdd:
   selected_file: reports/bdd_selected_{source}.csv
@@ -42,3 +47,5 @@ bdd:
   filter_config: configs/bdd_filter.yaml
   # rider, не прошедший сопоставление или порог высоты, — ignore.
   ignore_categories: [rider]
+  # Запрещённые области для обучающих масок (замечание 7): все person, rider, bike + ignore-области.
+  forbidden_categories: [person, rider, bike]

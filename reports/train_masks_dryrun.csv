@@ -1,0 +1,6 @@
+dataset,regime,images,images_with_targets,targets,forbidden_boxes,masks,decoys,skip:decoy:no_clean_place,skip:decoy:no_clean_source,skip:mask:neighbor_cover
+bdd,proposed,5349,1349,1619,11122,775,774,0,1,55
+bdd,bg_nodecoy,5349,1349,1619,11122,775,0,0,0,55
+bdd,noise_decoy,5349,1349,1619,11122,777,776,1,0,54
+bdd,proposed_noise,5349,1349,1619,11122,777,0,0,0,54
+bdd,ore,5349,1349,1619,11122,843,843,0,0,0
